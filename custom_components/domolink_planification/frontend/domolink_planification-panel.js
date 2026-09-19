@@ -1,5 +1,5 @@
 /**
- * DomoLink-Planification — Panneau Tactile & Carte Lovelace (v1.1.0)
+ * DomoLink-Planification — Panneau Tactile & Carte Lovelace (v1.2.0)
  * Glassmorphism sombre, suivi solaire bioclimatique des volets, gestion multi-pays des jours fériés.
  */
 
@@ -718,6 +718,12 @@
       }
     }
 
+    connectedCallback() {
+      if (typeof applySidebarBadge === "function") {
+        applySidebarBadge();
+      }
+    }
+
     async _fetchData() {
       if (!this._hass) return;
       try {
@@ -833,6 +839,8 @@
         shading_position: 20,
         open_position: 100,
         holiday_mode: "always",
+        zone_person_id: "any",
+        zone_id: "zone.home",
       };
       this._editingSchedule = sched ? Object.assign(defaultSched, JSON.parse(JSON.stringify(sched))) : defaultSched;
       this._renderModal();
@@ -1098,6 +1106,17 @@
       } else if (sched.time_type === "sunset") {
         const off = sched.solar_offset_minutes || 0;
         triggerDesc = `🌇 Coucher du soleil (${off >= 0 ? "+" : ""}${off} min)`;
+      } else if (sched.time_type === "zone_enter" || sched.time_type === "zone_leave") {
+        const states = (this._hass && this._hass.states) ? this._hass.states : {};
+        const isEnter = sched.time_type === "zone_enter";
+        const pId = sched.zone_person_id || "any";
+        const pName = (pId === "any" || !pId) ? "Toute personne" : (states[pId]?.attributes?.friendly_name || pId);
+        const zId = sched.zone_id || "zone.home";
+        const rawZone = zId.replace("zone.", "");
+        const zName = states[zId]?.attributes?.friendly_name || (rawZone.charAt(0).toUpperCase() + rawZone.slice(1));
+        triggerDesc = isEnter
+          ? `📍 Arrivée de <strong>${pName}</strong> dans <strong>${zName}</strong>`
+          : `🚪 Sortie de <strong>${pName}</strong> de <strong>${zName}</strong>`;
       } else {
         triggerDesc = `🕒 Heure fixe (${sched.time || "07:30"})`;
       }
@@ -1508,6 +1527,39 @@
         })
         .sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }));
 
+      // 4. Liste enrichie des personnes / trackers pour les déclencheurs de présence
+      const personEntities = [
+        { id: "any", name: "👤 Toute personne / N'importe qui", state: "", unit: "" },
+        ...Object.keys(states)
+          .filter(k => k.startsWith("person.") || k.startsWith("device_tracker."))
+          .map(k => {
+            const st = states[k];
+            const fn = (st.attributes && st.attributes.friendly_name) ? st.attributes.friendly_name : k;
+            return {
+              id: k,
+              name: `${fn} (${k})`,
+              state: st.state || "",
+              unit: ""
+            };
+          })
+          .sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }))
+      ];
+
+      // 5. Liste enrichie des zones disponibles
+      const zoneEntities = Object.keys(states)
+        .filter(k => k.startsWith("zone."))
+        .map(k => {
+          const st = states[k];
+          const fn = (st.attributes && st.attributes.friendly_name) ? st.attributes.friendly_name : k.replace("zone.", "");
+          return {
+            id: k,
+            name: `${fn} (${k})`,
+            state: st.state || "",
+            unit: ""
+          };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }));
+
       const modalEl = document.createElement("div");
       modalEl.className = "modal-backdrop";
       modalEl.innerHTML = `
@@ -1593,13 +1645,15 @@
               </div>
             </div>
           ` : `
-            <!-- 1. Déclenchement Temporel & Solaire -->
+            <!-- 1. Déclenchement Temporel, Solaire ou Zone -->
             <div class="form-group">
               <label>Moment du déclenchement</label>
-              <div class="segmented-control" id="ctrl-time-type">
+              <div class="segmented-control" id="ctrl-time-type" style="display: flex; flex-wrap: wrap; gap: 6px;">
                 <button type="button" class="segmented-btn ${(s.time_type === 'fixed' || !s.time_type) ? 'active' : ''}" data-type="fixed">🕒 Heure fixe</button>
-                <button type="button" class="segmented-btn ${s.time_type === 'sunrise' ? 'active' : ''}" data-type="sunrise">🌅 Lever du soleil</button>
-                <button type="button" class="segmented-btn ${s.time_type === 'sunset' ? 'active' : ''}" data-type="sunset">🌇 Coucher du soleil</button>
+                <button type="button" class="segmented-btn ${s.time_type === 'sunrise' ? 'active' : ''}" data-type="sunrise">🌅 Lever soleil</button>
+                <button type="button" class="segmented-btn ${s.time_type === 'sunset' ? 'active' : ''}" data-type="sunset">🌇 Coucher soleil</button>
+                <button type="button" class="segmented-btn ${s.time_type === 'zone_enter' ? 'active' : ''}" data-type="zone_enter">📍 Arrivée zone</button>
+                <button type="button" class="segmented-btn ${s.time_type === 'zone_leave' ? 'active' : ''}" data-type="zone_leave">🚪 Sortie zone</button>
               </div>
 
               <div id="section-fixed-time" style="${(s.time_type === 'fixed' || !s.time_type) ? '' : 'display:none;'}">
@@ -1611,6 +1665,56 @@
                   <label style="margin:0; font-size:12px; white-space:nowrap;">Décalage (minutes) :</label>
                   <input type="number" class="form-control" id="modal-solar-offset" value="${s.solar_offset_minutes !== undefined ? s.solar_offset_minutes : 0}" step="5" style="max-width: 120px;">
                   <span style="font-size:12px; color:#94a3b8;">(- avant, + après)</span>
+                </div>
+              </div>
+
+              <div id="section-zone-trigger" style="${(s.time_type === 'zone_enter' || s.time_type === 'zone_leave') ? '' : 'display:none;'}">
+                <div style="display:flex; gap: 12px; margin-top: 10px;">
+                  <div style="flex:1;">
+                    <label style="font-size:12px; font-weight:600; color:#cbd5e1; margin-bottom:4px; display:block;">
+                      Personne concernée
+                      <span class="ac-count-badge">${personEntities.length}</span>
+                    </label>
+                    <div class="ac-wrapper" id="ac-person-wrapper">
+                      <div class="ac-input-group">
+                        <input type="text" class="form-control ac-input" id="modal-zone-person" 
+                               placeholder="👤 Toute personne ou nom..." 
+                               value="${s.zone_person_id || 'any'}" autocomplete="off">
+                        <div class="ac-controls">
+                          <button type="button" class="ac-btn ac-clear-btn" title="Effacer la saisie">✕</button>
+                          <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste">▼</button>
+                        </div>
+                      </div>
+                      <div class="ac-dropdown" id="ac-person-dropdown"></div>
+                    </div>
+                    <div class="ac-selection-hint" id="ac-person-hint">
+                      Sélectionné : <strong>${(s.zone_person_id === 'any' || !s.zone_person_id) ? '👤 Toute personne / N\'importe qui' : (states[s.zone_person_id]?.attributes?.friendly_name || s.zone_person_id)}</strong>
+                    </div>
+                  </div>
+                  <div style="flex:1;">
+                    <label style="font-size:12px; font-weight:600; color:#cbd5e1; margin-bottom:4px; display:block;">
+                      Zone cible
+                      <span class="ac-count-badge">${zoneEntities.length}</span>
+                    </label>
+                    <div class="ac-wrapper" id="ac-zone-wrapper">
+                      <div class="ac-input-group">
+                        <input type="text" class="form-control ac-input" id="modal-zone-id" 
+                               placeholder="📍 Zone (ex: zone.home)..." 
+                               value="${s.zone_id || 'zone.home'}" autocomplete="off">
+                        <div class="ac-controls">
+                          <button type="button" class="ac-btn ac-clear-btn" title="Effacer la saisie">✕</button>
+                          <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste">▼</button>
+                        </div>
+                      </div>
+                      <div class="ac-dropdown" id="ac-zone-dropdown"></div>
+                    </div>
+                    <div class="ac-selection-hint" id="ac-zone-hint">
+                      Sélectionné : <strong>${states[s.zone_id || 'zone.home']?.attributes?.friendly_name || s.zone_id || 'Maison (zone.home)'}</strong>
+                    </div>
+                  </div>
+                </div>
+                <div class="info-banner" style="margin-top: 8px;">
+                  📍 Déclenchement instantané dès qu'une personne franchit la zone (respecte les jours sélectionnés).
                 </div>
               </div>
             </div>
@@ -1842,7 +1946,22 @@
 
         setupTargetAc();
 
-        // 1. Boutons Type de Déclenchement (fixed / sunrise / sunset)
+        // Autocomplétion Personne et Zone pour déclencheur de présence
+        this._setupEntityAutocomplete(modalEl, {
+          inputId: "modal-zone-person",
+          dropdownId: "ac-person-dropdown",
+          hintId: "ac-person-hint",
+          entities: personEntities,
+        });
+
+        this._setupEntityAutocomplete(modalEl, {
+          inputId: "modal-zone-id",
+          dropdownId: "ac-zone-dropdown",
+          hintId: "ac-zone-hint",
+          entities: zoneEntities,
+        });
+
+        // 1. Boutons Type de Déclenchement (fixed / sunrise / sunset / zone_enter / zone_leave)
         modalEl.querySelectorAll("#ctrl-time-type .segmented-btn").forEach(btn => {
           btn.addEventListener("click", (e) => {
             modalEl.querySelectorAll("#ctrl-time-type .segmented-btn").forEach(b => b.classList.remove("active"));
@@ -1850,13 +1969,10 @@
             const type = e.currentTarget.dataset.type;
             const secFixed = modalEl.querySelector("#section-fixed-time");
             const secSolar = modalEl.querySelector("#section-solar-offset");
-            if (type === "fixed") {
-              if (secFixed) secFixed.style.display = "";
-              if (secSolar) secSolar.style.display = "none";
-            } else {
-              if (secFixed) secFixed.style.display = "none";
-              if (secSolar) secSolar.style.display = "";
-            }
+            const secZone = modalEl.querySelector("#section-zone-trigger");
+            if (secFixed) secFixed.style.display = (type === "fixed") ? "" : "none";
+            if (secSolar) secSolar.style.display = (type === "sunrise" || type === "sunset") ? "" : "none";
+            if (secZone) secZone.style.display = (type === "zone_enter" || type === "zone_leave") ? "" : "none";
           });
         });
 
@@ -1962,13 +2078,16 @@
           s.shading_position = parseInt(modalEl.querySelector("#modal-pos-shading").value, 10);
           s.open_position = parseInt(modalEl.querySelector("#modal-pos-open").value, 10);
         } else {
-          // Time type & offset
+          // Time type & offset / zone
           const activeTimeBtn = modalEl.querySelector("#ctrl-time-type .segmented-btn.active");
           s.time_type = activeTimeBtn ? activeTimeBtn.dataset.type : "fixed";
           if (s.time_type === "fixed") {
             s.time = modalEl.querySelector("#modal-time").value || "07:30";
-          } else {
+          } else if (s.time_type === "sunrise" || s.time_type === "sunset") {
             s.solar_offset_minutes = parseInt(modalEl.querySelector("#modal-solar-offset").value || "0", 10);
+          } else if (s.time_type === "zone_enter" || s.time_type === "zone_leave") {
+            s.zone_person_id = modalEl.querySelector("#modal-zone-person").value.trim() || "any";
+            s.zone_id = modalEl.querySelector("#modal-zone-id").value.trim() || "zone.home";
           }
 
           // Recurrence mode
@@ -2098,9 +2217,95 @@
     description: "Affichage et gestion des planifications et volets solaires DomoLink",
   });
 
+  // =========================================================================
+  // BADGE BLEU FRANCE DANS LA BARRE LATÉRALE (SIDEBAR)
+  // =========================================================================
+  function applySidebarBadge() {
+    function getDeepRoots(node, list = []) {
+      if (!node) return list;
+      if (node.shadowRoot) {
+        list.push(node.shadowRoot);
+        getDeepRoots(node.shadowRoot, list);
+      }
+      for (const child of node.children || []) {
+        getDeepRoots(child, list);
+      }
+      return list;
+    }
+
+    try {
+      const roots = [document, ...getDeepRoots(document.body)];
+      for (const r of roots) {
+        if (!r.querySelectorAll) continue;
+
+        // 1. Injection CSS dans les shadowRoots de la sidebar
+        const sidebars = r.querySelectorAll("ha-sidebar");
+        for (const sb of sidebars) {
+          const sRoot = sb.shadowRoot || sb;
+          if (sRoot && !sRoot.querySelector("#domolink-sidebar-badge-css")) {
+            const style = document.createElement("style");
+            style.id = "domolink-sidebar-badge-css";
+            style.textContent = `
+              a[data-panel="domolink-planification"] .item-text,
+              a[href*="domolink-planification"] .item-text,
+              paper-icon-item[data-panel="domolink-planification"] .item-text,
+              ha-list-item[data-panel="domolink-planification"] .item-text {
+                background: #002395 !important; /* Bleu France */
+                color: #ffffff !important;
+                border-radius: 12px !important;
+                font-weight: 700 !important;
+                font-size: 13px !important;
+                padding: 3px 10px !important;
+                display: inline-block !important;
+                box-shadow: 0 2px 6px rgba(0, 35, 149, 0.45) !important;
+                letter-spacing: 0.3px !important;
+              }
+              a[data-panel="domolink-planification"]:hover .item-text,
+              a[href*="domolink-planification"]:hover .item-text {
+                background: #001b73 !important;
+                box-shadow: 0 3px 10px rgba(0, 35, 149, 0.65) !important;
+              }
+            `;
+            sRoot.appendChild(style);
+          }
+        }
+
+        // 2. Application directe de styles en ligne sur les éléments de texte trouvés
+        const targets = r.querySelectorAll(`
+          a[data-panel="domolink-planification"] .item-text,
+          a[href*="domolink-planification"] .item-text,
+          paper-icon-item[data-panel="domolink-planification"] .item-text,
+          ha-list-item[data-panel="domolink-planification"] .item-text
+        `);
+        targets.forEach(el => {
+          el.style.setProperty("background", "#002395", "important");
+          el.style.setProperty("color", "#ffffff", "important");
+          el.style.setProperty("border-radius", "12px", "important");
+          el.style.setProperty("font-weight", "700", "important");
+          el.style.setProperty("font-size", "13px", "important");
+          el.style.setProperty("padding", "3px 10px", "important");
+          el.style.setProperty("display", "inline-block", "important");
+          el.style.setProperty("box-shadow", "0 2px 6px rgba(0, 35, 149, 0.45)", "important");
+        });
+      }
+    } catch (e) {
+      // Silencieux
+    }
+  }
+
+  // Appliquer le badge et assurer sa persistance lors des navigations
+  if (typeof window !== "undefined") {
+    applySidebarBadge();
+    setTimeout(applySidebarBadge, 300);
+    setTimeout(applySidebarBadge, 1000);
+    setTimeout(applySidebarBadge, 2500);
+    setInterval(applySidebarBadge, 4000);
+    window.addEventListener("location-changed", () => setTimeout(applySidebarBadge, 200));
+  }
+
   console.info(
-    `%c DOMOLINK-PLANIFICATION %c v1.1.0 chargé avec succès `,
-    "background: #3b82f6; color: #fff; font-weight: bold; border-radius: 4px 0 0 4px;",
+    `%c DOMOLINK-PLANIFICATION %c v1.2.0 chargé avec succès `,
+    "background: #002395; color: #fff; font-weight: bold; border-radius: 4px 0 0 4px;",
     "background: #1e293b; color: #60a5fa; border-radius: 0 4px 4px 0;"
   );
 })();

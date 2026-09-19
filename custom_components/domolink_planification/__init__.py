@@ -119,6 +119,9 @@ def _async_register_panel(hass: HomeAssistant) -> None:
     """Enregistre le panneau latéral Lovelace."""
     panel_url = f"{FRONTEND_URL_PATH}/{FRONTEND_FILE_NAME}?v={VERSION}"
     try:
+        if hasattr(frontend, "add_extra_js_url"):
+            frontend.add_extra_js_url(hass, panel_url)
+
         frontend.async_register_built_in_panel(
             hass,
             component_name="custom",

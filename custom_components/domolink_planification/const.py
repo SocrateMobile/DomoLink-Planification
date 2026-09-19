@@ -4,7 +4,7 @@ from typing import Final
 
 DOMAIN: Final = "domolink_planification"
 NAME: Final = "DomoLink-Planification"
-VERSION: Final = "1.1.0"
+VERSION: Final = "1.2.0"
 
 # Panneau Lovelace & Frontend
 PANEL_URL_PATH: Final = "domolink-planification"
@@ -32,10 +32,12 @@ DATE_MODE_WEEKDAYS: Final = "weekdays"    # Jours de la semaine dans le mois
 POST_EXEC_ACTION_DISABLE: Final = "disable"  # Désactiver la règle
 POST_EXEC_ACTION_DELETE: Final = "delete"    # Supprimer la règle
 
-# Types d'heure / déclenchement solaire
-TIME_TYPE_FIXED: Final = "fixed"      # Heure fixe (HH:MM)
-TIME_TYPE_SUNRISE: Final = "sunrise"  # Lever du soleil
-TIME_TYPE_SUNSET: Final = "sunset"    # Coucher du soleil
+# Types d'heure / déclenchement (solaire, zone, fixe)
+TIME_TYPE_FIXED: Final = "fixed"            # Heure fixe (HH:MM)
+TIME_TYPE_SUNRISE: Final = "sunrise"        # Lever du soleil
+TIME_TYPE_SUNSET: Final = "sunset"          # Coucher du soleil
+TIME_TYPE_ZONE_ENTER: Final = "zone_enter"  # Arrivée dans une zone
+TIME_TYPE_ZONE_LEAVE: Final = "zone_leave"  # Sortie d'une zone
 
 # Types de cibles
 TARGET_TYPE_ENTITY: Final = "entity"

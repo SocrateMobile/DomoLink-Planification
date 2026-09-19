@@ -1,4 +1,13 @@
 {
   "name": "DomoLink-Planification",
-  "render_readme": true
+  "render_readme": true,
+  "country": [
+    "FR",
+    "US",
+    "GB",
+    "IT",
+    "ES",
+    "DE",
+    "UA"
+  ]
 }

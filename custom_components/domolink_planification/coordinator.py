@@ -8,7 +8,8 @@ import logging
 import random
 from typing import Any
 
-from homeassistant.core import HomeAssistant
+from homeassistant.const import EVENT_STATE_CHANGED
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
@@ -31,6 +32,8 @@ from .const import (
     TIME_TYPE_FIXED,
     TIME_TYPE_SUNRISE,
     TIME_TYPE_SUNSET,
+    TIME_TYPE_ZONE_ENTER,
+    TIME_TYPE_ZONE_LEAVE,
     TRIGGER_TYPE_INTERVAL,
     TRIGGER_TYPE_ONCE,
     TRIGGER_TYPE_SOLAR,
@@ -62,6 +65,7 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._last_evaluated_minute: str | None = None
         self._solar_shading_states: dict[str, dict[str, Any]] = {}
         self._remove_timer: Any = None
+        self._remove_state_listener: Any = None
 
     async def async_init(self) -> None:
         """Initialise le stockage et lance la boucle de synchronisation temporelle."""
@@ -79,13 +83,36 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._async_tick,
             timedelta(seconds=30),
         )
-        _LOGGER.info("DomoLink-Planification: Moteur de planification et suivi solaire démarré.")
+
+        # Écouteur en direct des arrivées et départs de zones pour les personnes et trackers
+        @callback
+        def _async_on_state_changed(event: Event) -> None:
+            entity_id = event.data.get("entity_id")
+            if not entity_id or not (entity_id.startswith("person.") or entity_id.startswith("device_tracker.")):
+                return
+            old_state = event.data.get("old_state")
+            new_state = event.data.get("new_state")
+            if not old_state or not new_state or old_state.state == new_state.state:
+                return
+            self.hass.async_create_task(
+                self._async_handle_person_state_change(entity_id, old_state.state, new_state.state)
+            )
+
+        self._remove_state_listener = self.hass.bus.async_listen(
+            EVENT_STATE_CHANGED,
+            _async_on_state_changed,
+        )
+
+        _LOGGER.info("DomoLink-Planification: Moteur de planification, présence et suivi solaire démarré.")
 
     def async_stop(self) -> None:
         """Arrête les boucles en arrière-plan."""
         if self._remove_timer:
             self._remove_timer()
             self._remove_timer = None
+        if self._remove_state_listener:
+            self._remove_state_listener()
+            self._remove_state_listener = None
 
     async def _async_tick(self, now: datetime) -> None:
         """Vérification périodique des déclencheurs et du suivi solaire."""
@@ -242,6 +269,121 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         sched["is_completed"] = True
                         await self.storage.async_save_schedule(sched_id, sched)
 
+    # -------------------------------------------------------------------------
+    # Gestion des déclencheurs de présence géographique (Arrivée / Sortie zone)
+    # -------------------------------------------------------------------------
+    def _matches_zone(self, zone_id: str, state_str: str) -> bool:
+        """Vérifie si un état correspond à une zone donnée."""
+        if not state_str:
+            return False
+        st_clean = state_str.strip().lower()
+
+        # 1. zone.home / Maison
+        if zone_id in ("zone.home", "home"):
+            return st_clean in ("home", "maison")
+
+        clean_zone = zone_id if zone_id.startswith("zone.") else f"zone.{zone_id}"
+        zone_ent = self.hass.states.get(clean_zone)
+        if zone_ent:
+            friendly = (zone_ent.attributes.get("friendly_name") or "").strip().lower()
+            if friendly and st_clean == friendly:
+                return True
+            if st_clean == zone_ent.name.strip().lower():
+                return True
+
+        short_name = clean_zone.replace("zone.", "").strip().lower()
+        if st_clean == short_name:
+            return True
+
+        return False
+
+    def _is_zone_transition_match(self, target_zone_id: str, old_st: str, new_st: str, time_type: str) -> bool:
+        """Détermine si la transition d'état correspond à l'entrée ou la sortie de la zone."""
+        was_in = self._matches_zone(target_zone_id, old_st)
+        is_in = self._matches_zone(target_zone_id, new_st)
+
+        if time_type == TIME_TYPE_ZONE_ENTER:
+            return (not was_in) and is_in
+        if time_type == TIME_TYPE_ZONE_LEAVE:
+            return was_in and (not is_in)
+        return False
+
+    async def _async_handle_person_state_change(self, person_id: str, old_st: str, new_st: str) -> None:
+        """Gère le déclenchement des règles de présence (Entrée / Sortie de zone)."""
+        now = dt_util.now()
+        schedules = self.storage.get_schedules()
+        settings = self.storage.get_settings()
+        country = settings.get("country", "FR")
+
+        for sched_id, sched in list(schedules.items()):
+            if not sched.get("enabled", True) or sched.get("is_completed", False):
+                continue
+
+            time_type = sched.get("time_type")
+            if time_type not in (TIME_TYPE_ZONE_ENTER, TIME_TYPE_ZONE_LEAVE):
+                continue
+
+            # 1. Vérification de la personne
+            target_person = sched.get("zone_person_id")
+            if target_person and target_person not in ("any", "all", "") and target_person != person_id:
+                continue
+
+            # 2. Résolution de la zone cible
+            target_zone_id = sched.get("zone_id", "zone.home")
+            if not self._is_zone_transition_match(target_zone_id, old_st, new_st, time_type):
+                continue
+
+            # 3. Vérification de la récurrence (jours autorisés, date, etc.)
+            if not RecurrenceEngine.check_date_match(sched, now):
+                continue
+
+            # 4. Vérification des conditions de garde-fous (Jours fériés, alarme, etc.)
+            condition_met, cond_reason = self._check_conditions(sched, now, country)
+            if not condition_met:
+                _LOGGER.info("DomoLink-Planification [Zone %s] Ignoré pour %s : %s", sched.get("name"), person_id, cond_reason)
+                await self.storage.async_add_history({
+                    "timestamp": now.isoformat(),
+                    "schedule_id": sched_id,
+                    "name": sched.get("name", sched_id),
+                    "status": "SKIPPED",
+                    "details": f"Zone: {cond_reason}",
+                })
+                continue
+
+            # 5. Déclenchement de l'action !
+            _LOGGER.info("DomoLink-Planification [Zone %s] Déclenchement pour %s (%s -> %s)", sched.get("name"), person_id, old_st, new_st)
+            action_data = dict(sched.get("action_data", {}))
+            if sched.get("target_type") == TARGET_TYPE_REMINDER:
+                action_data["reminder_message"] = sched.get("reminder_message") or sched.get("target_value")
+                action_data["channel"] = sched.get("reminder_channel") or REMINDER_CHANNEL_APP
+
+            success = await self.resolver.execute_action(
+                target_type=sched.get("target_type"),
+                target_value=sched.get("target_value"),
+                action_data=action_data,
+            )
+
+            # 6. Historique
+            event_name = "Arrivée" if time_type == TIME_TYPE_ZONE_ENTER else "Sortie"
+            await self.storage.async_add_history({
+                "timestamp": now.isoformat(),
+                "schedule_id": sched_id,
+                "name": sched.get("name", sched_id),
+                "status": "SUCCESS" if success else "FAILED",
+                "details": f"{event_name} de {person_id} ({target_zone_id})",
+            })
+
+            # 7. Post-exécution (Option B: Supprimer ou Désactiver si 'next' ou ponctuel)
+            recurrence_mode = sched.get("recurrence_mode", RECURRENCE_EVERY)
+            post_action = sched.get("post_execution_action", POST_EXEC_ACTION_DISABLE)
+            if recurrence_mode == RECURRENCE_NEXT:
+                if post_action == POST_EXEC_ACTION_DELETE:
+                    await self.storage.async_delete_schedule(sched_id)
+                else:
+                    sched["enabled"] = False
+                    sched["is_completed"] = True
+                    await self.storage.async_save_schedule(sched_id, sched)
+
     def _check_trigger_match(self, sched: dict[str, Any], now: datetime) -> bool:
         """Vérifie si l'heure et la date courantes correspondent au déclencheur."""
         time_type = sched.get("time_type", TIME_TYPE_FIXED)
@@ -327,8 +469,25 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 continue
 
             t_type = sched.get("trigger_type", TRIGGER_TYPE_TIME)
+            time_type = sched.get("time_type")
             if t_type == TRIGGER_TYPE_SOLAR_SHADING:
                 results[sched_id] = "Continu (Suivi solaire)"
+                continue
+
+            if time_type in (TIME_TYPE_ZONE_ENTER, TIME_TYPE_ZONE_LEAVE):
+                z_id = sched.get("zone_id", "zone.home")
+                z_st = self.hass.states.get(z_id)
+                z_name = (z_st.attributes.get("friendly_name") or z_st.name) if z_st else z_id.replace("zone.", "").capitalize()
+                p_id = sched.get("zone_person_id")
+                p_name = "Toute personne"
+                if p_id and p_id not in ("any", "all", ""):
+                    p_st = self.hass.states.get(p_id)
+                    p_name = (p_st.attributes.get("friendly_name") or p_st.name) if p_st else p_id
+
+                if time_type == TIME_TYPE_ZONE_ENTER:
+                    results[sched_id] = f"📍 Arrivée ({p_name} ➔ {z_name})"
+                else:
+                    results[sched_id] = f"🚪 Sortie ({p_name} ➔ {z_name})"
                 continue
 
             if t_type == TRIGGER_TYPE_ONCE:
