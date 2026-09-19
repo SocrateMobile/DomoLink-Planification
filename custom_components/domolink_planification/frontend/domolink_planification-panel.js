@@ -1,5 +1,5 @@
 /**
- * DomoLink-Planification — Panneau Tactile & Carte Lovelace (v1.0.0)
+ * DomoLink-Planification — Panneau Tactile & Carte Lovelace (v1.0.1)
  * Glassmorphism sombre, suivi solaire bioclimatique des volets, gestion multi-pays des jours fériés.
  */
 
@@ -36,6 +36,16 @@
     { code: "UA", name: "Ukraine 🇺🇦" },
   ];
 
+  const WEEKDAYS_LABELS = [
+    { id: 0, label: "Lun" },
+    { id: 1, label: "Mar" },
+    { id: 2, label: "Mer" },
+    { id: 3, label: "Jeu" },
+    { id: 4, label: "Ven" },
+    { id: 5, label: "Sam" },
+    { id: 6, label: "Dim" },
+  ];
+
   const STYLES = `
     :host {
       display: block;
@@ -45,6 +55,7 @@
       min-height: 100vh;
       box-sizing: border-box;
       padding: 24px;
+      position: relative;
     }
     * { box-sizing: border-box; }
     
@@ -97,6 +108,7 @@
       display: flex;
       align-items: center;
       gap: 12px;
+      flex-wrap: wrap;
     }
     
     .btn {
@@ -143,6 +155,7 @@
       margin-bottom: 24px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.1);
       padding-bottom: 8px;
+      overflow-x: auto;
     }
     .tab {
       padding: 10px 16px;
@@ -152,6 +165,7 @@
       font-weight: 600;
       color: #94a3b8;
       transition: all 0.2s ease;
+      white-space: nowrap;
     }
     .tab.active {
       color: #fff;
@@ -287,16 +301,17 @@
       transform: translateX(20px);
     }
 
-    /* Modal Dialog */
+    /* Modal Backdrop & Dialog */
     .modal-backdrop {
       position: fixed;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.7);
-      backdrop-filter: blur(8px);
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 1000;
+      z-index: 999999;
       padding: 20px;
     }
     .modal {
@@ -304,11 +319,13 @@
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 16px;
       width: 100%;
-      max-width: 600px;
+      max-width: 640px;
       max-height: 90vh;
       overflow-y: auto;
       padding: 24px;
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+      position: relative;
+      z-index: 1000000;
     }
     .modal h2 {
       margin: 0 0 16px 0;
@@ -328,7 +345,7 @@
     .form-control {
       width: 100%;
       padding: 10px 14px;
-      background: rgba(15, 23, 42, 0.8);
+      background: rgba(15, 23, 42, 0.85);
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 8px;
       color: #fff;
@@ -356,6 +373,7 @@
       text-align: center;
       font-size: 12px;
       font-weight: 600;
+      user-select: none;
     }
     .day-btn.selected {
       background: #3b82f6;
@@ -375,17 +393,19 @@
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
       font-weight: 600;
       font-size: 14px;
-      z-index: 2000;
+      z-index: 1000005;
       display: flex;
       align-items: center;
       gap: 10px;
       transform: translateY(100px);
       opacity: 0;
       transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      pointer-events: none;
     }
     .toast.show {
       transform: translateY(0);
       opacity: 1;
+      pointer-events: auto;
     }
 
     /* Solar compass view */
@@ -514,6 +534,7 @@
         weekdays: [0, 1, 2, 3, 4],
         target_type: isSolar ? "entity" : "label",
         target_value: "",
+        action_service: "turn_on",
         cover_entity_id: "",
         orientation: "S",
         temperature_sensor_id: "",
@@ -583,11 +604,17 @@
         <div class="toast" id="toast"></div>
       `;
 
-      // Event listeners
-      this.shadowRoot.querySelector("#btn-copy-card").addEventListener("click", () => this._copyLovelaceCardCode());
-      this.shadowRoot.querySelector("#btn-add-schedule").addEventListener("click", () => this._openScheduleModal(null, false));
-      this.shadowRoot.querySelector("#btn-add-solar").addEventListener("click", () => this._openScheduleModal(null, true));
+      // Event Listeners sur les boutons du bandeau supérieur
+      const btnCopy = this.shadowRoot.querySelector("#btn-copy-card");
+      if (btnCopy) btnCopy.addEventListener("click", () => this._copyLovelaceCardCode());
 
+      const btnAddSched = this.shadowRoot.querySelector("#btn-add-schedule");
+      if (btnAddSched) btnAddSched.addEventListener("click", () => this._openScheduleModal(null, false));
+
+      const btnAddSolar = this.shadowRoot.querySelector("#btn-add-solar");
+      if (btnAddSolar) btnAddSolar.addEventListener("click", () => this._openScheduleModal(null, true));
+
+      // Event Listeners sur les onglets
       this.shadowRoot.querySelectorAll(".tab").forEach(el => {
         el.addEventListener("click", (e) => {
           this._activeTab = e.currentTarget.dataset.tab;
@@ -595,16 +622,82 @@
         });
       });
 
-      this._attachCardActionListeners();
+      // Délégation d'événements globale sur le shadowRoot pour garantir que tous les boutons fonctionnent
+      this._attachEventDelegation();
+    }
+
+    _attachEventDelegation() {
+      // 1. Boutons "+ Créer une première règle" sur les états vides
+      const emptyAddBtn = this.shadowRoot.querySelector("#btn-empty-add");
+      if (emptyAddBtn) {
+        emptyAddBtn.addEventListener("click", () => this._openScheduleModal(null, false));
+      }
+
+      const solarEmptyAddBtn = this.shadowRoot.querySelector("#btn-solar-empty-add");
+      if (solarEmptyAddBtn) {
+        solarEmptyAddBtn.addEventListener("click", () => this._openScheduleModal(null, true));
+      }
+
+      // 2. Toggles switch sur les cartes
+      this.shadowRoot.querySelectorAll(".toggle-schedule").forEach(toggle => {
+        toggle.addEventListener("change", (e) => {
+          const card = e.currentTarget.closest(".card");
+          if (card) {
+            const schedId = card.dataset.id;
+            this._toggleSchedule(schedId, !e.currentTarget.checked);
+          }
+        });
+      });
+
+      // 3. Boutons d'action sur les cartes
+      this.shadowRoot.querySelectorAll(".trigger-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const card = e.currentTarget.closest(".card");
+          if (card) this._triggerNow(card.dataset.id);
+        });
+      });
+
+      this.shadowRoot.querySelectorAll(".edit-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const card = e.currentTarget.closest(".card");
+          if (card) {
+            const sched = this._data.schedules[card.dataset.id];
+            if (sched) this._openScheduleModal(sched, sched.trigger_type === "solar_shading");
+          }
+        });
+      });
+
+      this.shadowRoot.querySelectorAll(".delete-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const card = e.currentTarget.closest(".card");
+          if (card) this._deleteSchedule(card.dataset.id);
+        });
+      });
+
+      // 4. Enregistrement des paramètres
+      const btnSaveSettings = this.shadowRoot.querySelector("#btn-save-settings");
+      if (btnSaveSettings) {
+        btnSaveSettings.addEventListener("click", async () => {
+          const country = this.shadowRoot.querySelector("#settings-country").value;
+          await this._hass.fetchWithAuth("/api/domolink_planification/save_settings", {
+            method: "POST",
+            body: JSON.stringify({ country }),
+          });
+          this._showToast("⚙️ Paramètres enregistrés !");
+          await this._fetchData();
+        });
+      }
     }
 
     _renderActiveTabContent(timeSchedules, solarSchedules, sunAzimuth, sunElevation) {
       if (this._activeTab === "schedules") {
         if (timeSchedules.length === 0) {
           return `
-            <div style="text-align: center; padding: 48px; background: rgba(30,41,59,0.4); border-radius: 16px;">
-              <p style="font-size: 18px; color: #94a3b8;">Aucune planification temporelle active.</p>
-              <button class="btn btn-primary" id="btn-empty-add">+ Créer une première règle</button>
+            <div style="text-align: center; padding: 60px 24px; background: rgba(30,41,59,0.4); border-radius: 16px; border: 1px dashed rgba(255,255,255,0.15);">
+              <div style="font-size: 48px; margin-bottom: 12px;">🗓️</div>
+              <p style="font-size: 18px; color: #f1f5f9; font-weight: 600; margin: 0 0 8px 0;">Aucune planification temporelle active.</p>
+              <p style="font-size: 13px; color: #94a3b8; margin: 0 0 20px 0;">Créez votre première règle pour déclencher des actions, scripts ou étiquettes.</p>
+              <button class="btn btn-primary" id="btn-empty-add" style="font-size: 15px; padding: 12px 24px;">+ Créer une première règle</button>
             </div>
           `;
         }
@@ -636,9 +729,11 @@
 
           <div class="grid">
             ${solarSchedules.length === 0 ? `
-              <div style="grid-column: 1/-1; text-align: center; padding: 40px; background: rgba(30,41,59,0.4); border-radius: 14px;">
-                <p style="color: #94a3b8;">Aucun volet configuré pour le suivi solaire.</p>
-                <button class="btn btn-primary" id="btn-solar-empty-add">+ Configurer un volet solaire</button>
+              <div style="grid-column: 1/-1; text-align: center; padding: 60px 24px; background: rgba(30,41,59,0.4); border-radius: 16px; border: 1px dashed rgba(255,255,255,0.15);">
+                <div style="font-size: 48px; margin-bottom: 12px;">☀️</div>
+                <p style="font-size: 18px; color: #f1f5f9; font-weight: 600; margin: 0 0 8px 0;">Aucun volet configuré pour le suivi solaire.</p>
+                <p style="font-size: 13px; color: #94a3b8; margin: 0 0 20px 0;">Associez l'orientation de vos façades à la trajectoire solaire pour un confort d'été optimal.</p>
+                <button class="btn btn-primary" id="btn-solar-empty-add" style="font-size: 15px; padding: 12px 24px;">+ Configurer un volet solaire</button>
               </div>
             ` : solarSchedules.map(sched => this._renderSolarCard(sched)).join("")}
           </div>
@@ -764,57 +859,18 @@
       `;
     }
 
-    _attachCardActionListeners() {
-      // Toggles
-      this.shadowRoot.querySelectorAll(".toggle-schedule").forEach(toggle => {
-        toggle.addEventListener("change", (e) => {
-          const card = e.currentTarget.closest(".card");
-          const schedId = card.dataset.id;
-          this._toggleSchedule(schedId, !e.currentTarget.checked);
-        });
-      });
-
-      // Actions
-      this.shadowRoot.querySelectorAll(".trigger-btn").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-          const schedId = e.currentTarget.closest(".card").dataset.id;
-          this._triggerNow(schedId);
-        });
-      });
-
-      this.shadowRoot.querySelectorAll(".edit-btn").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-          const schedId = e.currentTarget.closest(".card").dataset.id;
-          const sched = this._data.schedules[schedId];
-          if (sched) this._openScheduleModal(sched, sched.trigger_type === "solar_shading");
-        });
-      });
-
-      this.shadowRoot.querySelectorAll(".delete-btn").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-          const schedId = e.currentTarget.closest(".card").dataset.id;
-          this._deleteSchedule(schedId);
-        });
-      });
-
-      const btnSaveSettings = this.shadowRoot.querySelector("#btn-save-settings");
-      if (btnSaveSettings) {
-        btnSaveSettings.addEventListener("click", async () => {
-          const country = this.shadowRoot.querySelector("#settings-country").value;
-          await this._hass.fetchWithAuth("/api/domolink_planification/save_settings", {
-            method: "POST",
-            body: JSON.stringify({ country }),
-          });
-          this._showToast("⚙️ Paramètres enregistrés !");
-          await this._fetchData();
-        });
-      }
-    }
-
     _renderModal() {
       const s = this._editingSchedule;
       if (!s) return;
       const isSolar = s.trigger_type === "solar_shading";
+
+      // Récupérer la liste des entités disponibles dans Home Assistant
+      const states = (this._hass && this._hass.states) ? this._hass.states : {};
+      const covers = Object.keys(states).filter(k => k.startsWith("cover.")).sort();
+      const tempSensors = Object.keys(states).filter(k => {
+        return k.startsWith("sensor.") && (k.includes("temp") || states[k].attributes.unit_of_measurement === "°C");
+      }).sort();
+      const allEntities = Object.keys(states).sort();
 
       const modalEl = document.createElement("div");
       modalEl.className = "modal-backdrop";
@@ -824,13 +880,16 @@
           
           <div class="form-group">
             <label>Nom de la règle</label>
-            <input type="text" class="form-control" id="modal-name" value="${s.name || ''}">
+            <input type="text" class="form-control" id="modal-name" value="${s.name || ''}" placeholder="Ex: Volets Salon, Lumière Extérieure...">
           </div>
 
           ${isSolar ? `
             <div class="form-group">
-              <label>Entité du Volet Roulant (cover.*)</label>
-              <input type="text" class="form-control" id="modal-cover-id" placeholder="cover.volet_salon" value="${s.cover_entity_id || ''}">
+              <label>Volet Roulant (cover.*)</label>
+              <input type="text" class="form-control" id="modal-cover-id" list="covers-datalist" placeholder="Sélectionnez ou tapez cover.volet_..." value="${s.cover_entity_id || ''}">
+              <datalist id="covers-datalist">
+                ${covers.map(c => `<option value="${c}">${(states[c].attributes.friendly_name || c)}</option>`).join("")}
+              </datalist>
             </div>
 
             <div class="form-group">
@@ -841,8 +900,11 @@
             </div>
 
             <div class="form-group">
-              <label>Capteur de Température de référence (sensor.*)</label>
-              <input type="text" class="form-control" id="modal-temp-sensor" placeholder="sensor.salon_temperature" value="${s.temperature_sensor_id || ''}">
+              <label>Capteur de Température de référence</label>
+              <input type="text" class="form-control" id="modal-temp-sensor" list="temps-datalist" placeholder="Sélectionnez ou tapez sensor.temperature_..." value="${s.temperature_sensor_id || ''}">
+              <datalist id="temps-datalist">
+                ${tempSensors.map(t => `<option value="${t}">${(states[t].attributes.friendly_name || t)}</option>`).join("")}
+              </datalist>
             </div>
 
             <div class="form-group">
@@ -867,10 +929,20 @@
             </div>
 
             <div class="form-group">
+              <label>Jours de la semaine</label>
+              <div class="weekday-selector" id="weekday-selector">
+                ${WEEKDAYS_LABELS.map(w => {
+                  const isSel = (s.weekdays || [0,1,2,3,4]).includes(w.id);
+                  return `<div class="day-btn ${isSel ? 'selected' : ''}" data-day="${w.id}">${w.label}</div>`;
+                }).join("")}
+              </div>
+            </div>
+
+            <div class="form-group">
               <label>Type de Cible</label>
               <select class="form-control" id="modal-target-type">
                 <option value="label" ${s.target_type === 'label' ? 'selected' : ''}>🏷️ Étiquette (Label HA)</option>
-                <option value="entity" ${s.target_type === 'entity' ? 'selected' : ''}>💡 Entité(s) spécifique(s)</option>
+                <option value="entity" ${s.target_type === 'entity' ? 'selected' : ''}>💡 Entité spécifique</option>
                 <option value="area" ${s.target_type === 'area' ? 'selected' : ''}>🏠 Pièce (Area)</option>
                 <option value="script" ${s.target_type === 'script' ? 'selected' : ''}>📜 Script</option>
                 <option value="automation" ${s.target_type === 'automation' ? 'selected' : ''}>⚙️ Automatisation</option>
@@ -879,8 +951,23 @@
             </div>
 
             <div class="form-group">
-              <label>Valeur de la Cible (ex: rez_de_chaussee, light.salon)</label>
-              <input type="text" class="form-control" id="modal-target-val" placeholder="ex: volets_rdc ou light.cuisine" value="${s.target_value || ''}">
+              <label>Cible (ex: rez_de_chaussee, volets, light.salon)</label>
+              <input type="text" class="form-control" id="modal-target-val" list="entities-datalist" placeholder="Saisissez ou sélectionnez la cible..." value="${s.target_value || ''}">
+              <datalist id="entities-datalist">
+                ${allEntities.slice(0, 200).map(e => `<option value="${e}">${(states[e].attributes.friendly_name || e)}</option>`).join("")}
+              </datalist>
+            </div>
+
+            <div class="form-group">
+              <label>Action à exécuter</label>
+              <select class="form-control" id="modal-action-service">
+                <option value="turn_on" ${s.action_service === 'turn_on' ? 'selected' : ''}>Allumer / Activer (turn_on)</option>
+                <option value="turn_off" ${s.action_service === 'turn_off' ? 'selected' : ''}>Éteindre / Désactiver (turn_off)</option>
+                <option value="toggle" ${s.action_service === 'toggle' ? 'selected' : ''}>Basculer (toggle)</option>
+                <option value="open_cover" ${s.action_service === 'open_cover' ? 'selected' : ''}>Ouvrir volet (open_cover)</option>
+                <option value="close_cover" ${s.action_service === 'close_cover' ? 'selected' : ''}>Fermer volet (close_cover)</option>
+                <option value="trigger" ${s.action_service === 'trigger' ? 'selected' : ''}>Déclencher (trigger)</option>
+              </select>
             </div>
 
             <div class="form-group">
@@ -901,23 +988,52 @@
         </div>
       `;
 
+      // Retirer tout modal existant avant d'ajouter le nouveau
+      const existing = this.shadowRoot.querySelector(".modal-backdrop");
+      if (existing) existing.remove();
+
       this.shadowRoot.appendChild(modalEl);
+
+      // Fermeture sur clic extérieur
+      modalEl.addEventListener("click", (e) => {
+        if (e.target === modalEl) this._closeModal();
+      });
+
+      // Gestion des boutons de jours de semaine
+      const selectedWeekdays = new Set(s.weekdays || [0, 1, 2, 3, 4]);
+      modalEl.querySelectorAll(".day-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const day = parseInt(e.currentTarget.dataset.day, 10);
+          if (selectedWeekdays.has(day)) {
+            selectedWeekdays.delete(day);
+            e.currentTarget.classList.remove("selected");
+          } else {
+            selectedWeekdays.add(day);
+            e.currentTarget.classList.add("selected");
+          }
+        });
+      });
 
       modalEl.querySelector("#modal-cancel").addEventListener("click", () => this._closeModal());
       modalEl.querySelector("#modal-save").addEventListener("click", () => {
-        s.name = modalEl.querySelector("#modal-name").value;
+        s.name = modalEl.querySelector("#modal-name").value.trim() || (isSolar ? "Volet Solaire" : "Planification");
         if (isSolar) {
-          s.cover_entity_id = modalEl.querySelector("#modal-cover-id").value;
+          s.cover_entity_id = modalEl.querySelector("#modal-cover-id").value.trim();
           s.orientation = modalEl.querySelector("#modal-orientation").value;
-          s.temperature_sensor_id = modalEl.querySelector("#modal-temp-sensor").value;
+          s.temperature_sensor_id = modalEl.querySelector("#modal-temp-sensor").value.trim();
           s.temperature_threshold = parseFloat(modalEl.querySelector("#modal-temp-thresh").value);
           s.shading_position = parseInt(modalEl.querySelector("#modal-pos-shading").value, 10);
           s.open_position = parseInt(modalEl.querySelector("#modal-pos-open").value, 10);
         } else {
           s.time = modalEl.querySelector("#modal-time").value;
+          s.weekdays = Array.from(selectedWeekdays).sort();
           s.target_type = modalEl.querySelector("#modal-target-type").value;
-          s.target_value = modalEl.querySelector("#modal-target-val").value;
+          s.target_value = modalEl.querySelector("#modal-target-val").value.trim();
           s.holiday_mode = modalEl.querySelector("#modal-holiday-mode").value;
+          s.action_service = modalEl.querySelector("#modal-action-service").value;
+          s.action_data = {
+            service: s.action_service,
+          };
         }
         this._saveScheduleFromModal();
       });
@@ -999,7 +1115,7 @@
   });
 
   console.info(
-    `%c DOMOLINK-PLANIFICATION %c v1.0.0 chargé avec succès `,
+    `%c DOMOLINK-PLANIFICATION %c v1.0.1 chargé avec succès `,
     "background: #3b82f6; color: #fff; font-weight: bold; border-radius: 4px 0 0 4px;",
     "background: #1e293b; color: #60a5fa; border-radius: 0 4px 4px 0;"
   );
