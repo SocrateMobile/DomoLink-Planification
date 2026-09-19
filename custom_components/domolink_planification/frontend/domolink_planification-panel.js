@@ -1,5 +1,5 @@
 /**
- * DomoLink-Planification — Panneau Tactile & Carte Lovelace (v1.0.1)
+ * DomoLink-Planification — Panneau Tactile & Carte Lovelace (v1.0.2)
  * Glassmorphism sombre, suivi solaire bioclimatique des volets, gestion multi-pays des jours fériés.
  */
 
@@ -379,6 +379,155 @@
       background: #3b82f6;
       color: #fff;
       border-color: #60a5fa;
+    }
+
+    /* Autocomplete Dropdown Component */
+    .ac-wrapper {
+      position: relative;
+      width: 100%;
+    }
+    .ac-input-group {
+      position: relative;
+      display: flex;
+      align-items: center;
+      width: 100%;
+    }
+    .ac-input-group .form-control {
+      padding-right: 64px;
+    }
+    .ac-controls {
+      position: absolute;
+      right: 8px;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      height: 100%;
+    }
+    .ac-btn {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      padding: 4px 6px;
+      font-size: 11px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+    .ac-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+    }
+    .ac-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      right: 0;
+      max-height: 250px;
+      overflow-y: auto;
+      background: #0f172a;
+      border: 1px solid rgba(59, 130, 246, 0.5);
+      border-radius: 10px;
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.85);
+      z-index: 1000020;
+      display: none;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(59, 130, 246, 0.5) transparent;
+    }
+    .ac-dropdown::-webkit-scrollbar {
+      width: 6px;
+    }
+    .ac-dropdown::-webkit-scrollbar-thumb {
+      background: rgba(59, 130, 246, 0.5);
+      border-radius: 4px;
+    }
+    .ac-dropdown.open {
+      display: block;
+    }
+    .ac-item {
+      padding: 10px 14px;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      transition: background 0.15s ease;
+    }
+    .ac-item:last-child {
+      border-bottom: none;
+    }
+    .ac-item:hover, .ac-item.active {
+      background: rgba(59, 130, 246, 0.25);
+    }
+    .ac-item-content {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      overflow: hidden;
+      flex: 1;
+    }
+    .ac-item-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: #f8fafc;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ac-item-id {
+      font-size: 11px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      color: #60a5fa;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ac-item-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #cbd5e1;
+      white-space: nowrap;
+    }
+    .ac-item-match {
+      color: #38bdf8;
+      font-weight: 700;
+      text-decoration: underline;
+    }
+    .ac-empty-msg {
+      padding: 16px;
+      text-align: center;
+      color: #94a3b8;
+      font-size: 13px;
+      font-style: italic;
+    }
+    .ac-count-badge {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 8px;
+      border-radius: 10px;
+      background: rgba(59, 130, 246, 0.2);
+      color: #60a5fa;
+      margin-left: 8px;
+      border: 1px solid rgba(59, 130, 246, 0.3);
+    }
+    .ac-selection-hint {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #94a3b8;
+      padding: 4px 8px;
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 6px;
+      border-left: 3px solid #3b82f6;
+    }
+    .ac-selection-hint strong {
+      color: #f1f5f9;
     }
 
     /* Toast */
@@ -859,6 +1008,223 @@
       `;
     }
 
+    _setupEntityAutocomplete(container, {
+      inputId,
+      dropdownId,
+      hintId,
+      entities,
+      fallbackEntities = null,
+      onSelect = null
+    }) {
+      const input = container.querySelector(`#${inputId}`);
+      const dropdown = container.querySelector(`#${dropdownId}`);
+      const hint = hintId ? container.querySelector(`#${hintId}`) : null;
+      if (!input || !dropdown) return;
+
+      let activeIndex = -1;
+      let currentList = [];
+
+      const normalize = (str) => {
+        return (str || "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase();
+      };
+
+      const escapeHtml = (str) => {
+        return (str || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      };
+
+      const highlightMatches = (text, query) => {
+        if (!query) return escapeHtml(text);
+        const nText = normalize(text);
+        const nQuery = normalize(query);
+        const idx = nText.indexOf(nQuery);
+        if (idx === -1) return escapeHtml(text);
+        const before = escapeHtml(text.substring(0, idx));
+        const match = escapeHtml(text.substring(idx, idx + query.length));
+        const after = escapeHtml(text.substring(idx + query.length));
+        return `${before}<span class="ac-item-match">${match}</span>${after}`;
+      };
+
+      const updateHint = (entityId) => {
+        if (!hint) return;
+        if (!entityId) {
+          hint.style.display = "none";
+          hint.innerHTML = "";
+          return;
+        }
+        const stateObj = this._hass && this._hass.states ? this._hass.states[entityId] : null;
+        if (stateObj) {
+          const fn = stateObj.attributes?.friendly_name || entityId;
+          const u = stateObj.attributes?.unit_of_measurement || "";
+          const val = stateObj.state;
+          hint.style.display = "block";
+          hint.innerHTML = `Sélectionné : <strong>${escapeHtml(fn)}</strong> (${escapeHtml(val)}${u ? ' ' + escapeHtml(u) : ''})`;
+        } else {
+          hint.style.display = "block";
+          hint.innerHTML = `Entité saisie : <strong>${escapeHtml(entityId)}</strong>`;
+        }
+      };
+
+      const filterList = (query) => {
+        const q = normalize(query.trim());
+        if (!q) return entities;
+
+        let filtered = entities.filter(e => {
+          return normalize(e.name).includes(q) || normalize(e.id).includes(q);
+        });
+
+        if (filtered.length === 0 && fallbackEntities && fallbackEntities.length > 0) {
+          filtered = fallbackEntities.filter(e => {
+            return normalize(e.name).includes(q) || normalize(e.id).includes(q);
+          });
+        }
+        return filtered;
+      };
+
+      const renderDropdown = (items, query = "") => {
+        currentList = items;
+        activeIndex = -1;
+
+        if (items.length === 0) {
+          dropdown.innerHTML = `<div class="ac-empty-msg">Aucune entité trouvée pour "<strong>${escapeHtml(query)}</strong>"</div>`;
+          dropdown.classList.add("open");
+          return;
+        }
+
+        const maxDisplay = 60;
+        const visibleItems = items.slice(0, maxDisplay);
+
+        let html = visibleItems.map((item, idx) => {
+          const stateLabel = item.unit ? `${item.state} ${item.unit}` : (item.state || "");
+          return `
+            <div class="ac-item" data-id="${escapeHtml(item.id)}" data-index="${idx}">
+              <div class="ac-item-content">
+                <div class="ac-item-name">${highlightMatches(item.name, query)}</div>
+                <div class="ac-item-id">${highlightMatches(item.id, query)}</div>
+              </div>
+              ${stateLabel ? `<div class="ac-item-badge">${escapeHtml(stateLabel)}</div>` : ""}
+            </div>
+          `;
+        }).join("");
+
+        if (items.length > maxDisplay) {
+          html += `<div class="ac-empty-msg" style="font-size:11px; padding:8px;">+ ${items.length - maxDisplay} autres entités (tapez pour filtrer)</div>`;
+        }
+
+        dropdown.innerHTML = html;
+        dropdown.classList.add("open");
+
+        dropdown.querySelectorAll(".ac-item").forEach(itemEl => {
+          itemEl.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            selectEntity(itemEl.dataset.id);
+          });
+        });
+      };
+
+      const selectEntity = (entityId) => {
+        input.value = entityId;
+        dropdown.classList.remove("open");
+        updateHint(entityId);
+        if (onSelect) onSelect(entityId);
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+
+      input.addEventListener("input", (e) => {
+        const val = e.target.value;
+        renderDropdown(filterList(val), val);
+        updateHint(val);
+      });
+
+      input.addEventListener("focus", () => {
+        renderDropdown(filterList(input.value), input.value);
+      });
+
+      input.addEventListener("blur", () => {
+        setTimeout(() => {
+          dropdown.classList.remove("open");
+        }, 220);
+      });
+
+      const wrapper = input.closest(".ac-wrapper");
+      if (wrapper) {
+        const toggleBtn = wrapper.querySelector(".ac-toggle-btn");
+        if (toggleBtn) {
+          toggleBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (dropdown.classList.contains("open")) {
+              dropdown.classList.remove("open");
+            } else {
+              input.focus();
+              renderDropdown(filterList(input.value), input.value);
+            }
+          });
+        }
+
+        const clearBtn = wrapper.querySelector(".ac-clear-btn");
+        if (clearBtn) {
+          clearBtn.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            input.value = "";
+            updateHint("");
+            input.focus();
+            renderDropdown(entities, "");
+            if (onSelect) onSelect("");
+          });
+        }
+      }
+
+      input.addEventListener("keydown", (e) => {
+        if (!dropdown.classList.contains("open")) {
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            renderDropdown(filterList(input.value), input.value);
+          }
+          return;
+        }
+
+        const domItems = dropdown.querySelectorAll(".ac-item");
+        if (domItems.length === 0) return;
+
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          activeIndex = (activeIndex + 1) % domItems.length;
+          updateActive(domItems);
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          activeIndex = (activeIndex - 1 + domItems.length) % domItems.length;
+          updateActive(domItems);
+        } else if (e.key === "Enter") {
+          if (activeIndex >= 0 && activeIndex < domItems.length) {
+            e.preventDefault();
+            selectEntity(domItems[activeIndex].dataset.id);
+          }
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          dropdown.classList.remove("open");
+        }
+      });
+
+      const updateActive = (domItems) => {
+        domItems.forEach((el, idx) => {
+          if (idx === activeIndex) {
+            el.classList.add("active");
+            el.scrollIntoView({ block: "nearest" });
+          } else {
+            el.classList.remove("active");
+          }
+        });
+      };
+    }
+
     _renderModal() {
       const s = this._editingSchedule;
       if (!s) return;
@@ -866,11 +1232,85 @@
 
       // Récupérer la liste des entités disponibles dans Home Assistant
       const states = (this._hass && this._hass.states) ? this._hass.states : {};
-      const covers = Object.keys(states).filter(k => k.startsWith("cover.")).sort();
-      const tempSensors = Object.keys(states).filter(k => {
-        return k.startsWith("sensor.") && (k.includes("temp") || states[k].attributes.unit_of_measurement === "°C");
-      }).sort();
-      const allEntities = Object.keys(states).sort();
+
+      // 1. Liste enrichie des volets (cover.*)
+      const coverEntities = Object.keys(states)
+        .filter(k => k.startsWith("cover."))
+        .map(k => {
+          const st = states[k];
+          const fn = (st.attributes && st.attributes.friendly_name) ? st.attributes.friendly_name : k;
+          let stateDesc = st.state === "open" ? "Ouvert" : (st.state === "closed" ? "Fermé" : st.state);
+          if (st.attributes && st.attributes.current_position !== undefined) {
+            stateDesc += ` (${st.attributes.current_position}%)`;
+          }
+          return {
+            id: k,
+            name: fn,
+            state: stateDesc,
+            unit: ""
+          };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }));
+
+      // 2. Liste enrichie des capteurs de température (sensor.*)
+      const tempSensorEntities = Object.keys(states)
+        .filter(k => {
+          if (!k.startsWith("sensor.")) return false;
+          const st = states[k];
+          const attrs = st.attributes || {};
+          const unit = attrs.unit_of_measurement || "";
+          const devClass = attrs.device_class || "";
+          const fn = (attrs.friendly_name || "").toLowerCase();
+          const lk = k.toLowerCase();
+
+          const isTempUnit = unit === "°C" || unit === "°F" || unit === "K";
+          const isTempClass = devClass === "temperature";
+          const hasTempWord = lk.includes("temperature") || lk.includes("temp_") || lk.endsWith("_temp") || fn.includes("températ") || fn.includes("temperature");
+          if (lk.includes("temps_de_fonctionnement") && !isTempUnit) return false;
+
+          return isTempUnit || isTempClass || hasTempWord;
+        })
+        .map(k => {
+          const st = states[k];
+          const attrs = st.attributes || {};
+          const fn = attrs.friendly_name || k;
+          const unit = attrs.unit_of_measurement || "°C";
+          return {
+            id: k,
+            name: fn,
+            state: st.state !== undefined ? st.state : "",
+            unit: unit
+          };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }));
+
+      // Fallback avec l'ensemble des sensors au cas où
+      const allSensors = Object.keys(states)
+        .filter(k => k.startsWith("sensor."))
+        .map(k => {
+          const st = states[k];
+          const attrs = st.attributes || {};
+          return {
+            id: k,
+            name: attrs.friendly_name || k,
+            state: st.state !== undefined ? st.state : "",
+            unit: attrs.unit_of_measurement || ""
+          };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }));
+
+      // Toutes entités pour les cibles générales
+      const allEntitiesList = Object.keys(states)
+        .map(k => {
+          const st = states[k];
+          return {
+            id: k,
+            name: (st.attributes && st.attributes.friendly_name) ? st.attributes.friendly_name : k,
+            state: st.state || "",
+            unit: (st.attributes && st.attributes.unit_of_measurement) ? st.attributes.unit_of_measurement : ""
+          };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name, "fr", { sensitivity: "base" }));
 
       const modalEl = document.createElement("div");
       modalEl.className = "modal-backdrop";
@@ -885,11 +1325,28 @@
 
           ${isSolar ? `
             <div class="form-group">
-              <label>Volet Roulant (cover.*)</label>
-              <input type="text" class="form-control" id="modal-cover-id" list="covers-datalist" placeholder="Sélectionnez ou tapez cover.volet_..." value="${s.cover_entity_id || ''}">
-              <datalist id="covers-datalist">
-                ${covers.map(c => `<option value="${c}">${(states[c].attributes.friendly_name || c)}</option>`).join("")}
-              </datalist>
+              <label>
+                Entité du Volet Roulant (cover.*)
+                <span class="ac-count-badge">${coverEntities.length} volet${coverEntities.length > 1 ? 's' : ''}</span>
+              </label>
+              <div class="ac-wrapper" id="ac-cover-wrapper">
+                <div class="ac-input-group">
+                  <input type="text" class="form-control ac-input" id="modal-cover-id" 
+                         placeholder="Tapez pour filtrer (ex: salon, rideau, volet)..." 
+                         value="${s.cover_entity_id || ''}" autocomplete="off">
+                  <div class="ac-controls">
+                    <button type="button" class="ac-btn ac-clear-btn" title="Effacer la saisie">✕</button>
+                    <button type="button" class="ac-btn ac-toggle-btn" title="Afficher tous les volets">▼</button>
+                  </div>
+                </div>
+                <div class="ac-dropdown" id="ac-cover-dropdown"></div>
+              </div>
+              <div class="ac-selection-hint" id="ac-cover-hint" style="${s.cover_entity_id ? '' : 'display:none;'}">
+                ${s.cover_entity_id && states[s.cover_entity_id] ? `
+                  Sélectionné : <strong>${states[s.cover_entity_id].attributes?.friendly_name || s.cover_entity_id}</strong>
+                  ${states[s.cover_entity_id].attributes?.current_position !== undefined ? `(${states[s.cover_entity_id].attributes.current_position}%)` : `(${states[s.cover_entity_id].state})`}
+                ` : ''}
+              </div>
             </div>
 
             <div class="form-group">
@@ -900,11 +1357,28 @@
             </div>
 
             <div class="form-group">
-              <label>Capteur de Température de référence</label>
-              <input type="text" class="form-control" id="modal-temp-sensor" list="temps-datalist" placeholder="Sélectionnez ou tapez sensor.temperature_..." value="${s.temperature_sensor_id || ''}">
-              <datalist id="temps-datalist">
-                ${tempSensors.map(t => `<option value="${t}">${(states[t].attributes.friendly_name || t)}</option>`).join("")}
-              </datalist>
+              <label>
+                Capteur de Température de référence (sensor.*)
+                <span class="ac-count-badge">${tempSensorEntities.length} capteur${tempSensorEntities.length > 1 ? 's' : ''}</span>
+              </label>
+              <div class="ac-wrapper" id="ac-temp-wrapper">
+                <div class="ac-input-group">
+                  <input type="text" class="form-control ac-input" id="modal-temp-sensor" 
+                         placeholder="Tapez pour filtrer (ex: salon, sonde, ext)..." 
+                         value="${s.temperature_sensor_id || ''}" autocomplete="off">
+                  <div class="ac-controls">
+                    <button type="button" class="ac-btn ac-clear-btn" title="Effacer la saisie">✕</button>
+                    <button type="button" class="ac-btn ac-toggle-btn" title="Afficher tous les capteurs">▼</button>
+                  </div>
+                </div>
+                <div class="ac-dropdown" id="ac-temp-dropdown"></div>
+              </div>
+              <div class="ac-selection-hint" id="ac-temp-hint" style="${s.temperature_sensor_id ? '' : 'display:none;'}">
+                ${s.temperature_sensor_id && states[s.temperature_sensor_id] ? `
+                  Sélectionné : <strong>${states[s.temperature_sensor_id].attributes?.friendly_name || s.temperature_sensor_id}</strong>
+                  (${states[s.temperature_sensor_id].state} ${states[s.temperature_sensor_id].attributes?.unit_of_measurement || '°C'})
+                ` : ''}
+              </div>
             </div>
 
             <div class="form-group">
@@ -950,12 +1424,25 @@
               </select>
             </div>
 
-            <div class="form-group">
-              <label>Cible (ex: rez_de_chaussee, volets, light.salon)</label>
-              <input type="text" class="form-control" id="modal-target-val" list="entities-datalist" placeholder="Saisissez ou sélectionnez la cible..." value="${s.target_value || ''}">
-              <datalist id="entities-datalist">
-                ${allEntities.slice(0, 200).map(e => `<option value="${e}">${(states[e].attributes.friendly_name || e)}</option>`).join("")}
-              </datalist>
+            <div class="form-group" id="group-target-val">
+              <label id="label-target-val">Cible</label>
+              <div class="ac-wrapper" id="ac-target-wrapper">
+                <div class="ac-input-group">
+                  <input type="text" class="form-control ac-input" id="modal-target-val" 
+                         placeholder="Saisissez ou recherchez la cible..." 
+                         value="${s.target_value || ''}" autocomplete="off">
+                  <div class="ac-controls">
+                    <button type="button" class="ac-btn ac-clear-btn" title="Effacer la saisie">✕</button>
+                    <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste">▼</button>
+                  </div>
+                </div>
+                <div class="ac-dropdown" id="ac-target-dropdown"></div>
+              </div>
+              <div class="ac-selection-hint" id="ac-target-hint" style="${s.target_value ? '' : 'display:none;'}">
+                ${s.target_value && states[s.target_value] ? `
+                  Sélectionné : <strong>${states[s.target_value].attributes?.friendly_name || s.target_value}</strong>
+                ` : ''}
+              </div>
             </div>
 
             <div class="form-group">
@@ -998,6 +1485,55 @@
       modalEl.addEventListener("click", (e) => {
         if (e.target === modalEl) this._closeModal();
       });
+
+      // Initialisation de l'autocomplétion
+      if (isSolar) {
+        this._setupEntityAutocomplete(modalEl, {
+          inputId: "modal-cover-id",
+          dropdownId: "ac-cover-dropdown",
+          hintId: "ac-cover-hint",
+          entities: coverEntities,
+          onSelect: (selectedId) => {
+            const nameInput = modalEl.querySelector("#modal-name");
+            if (nameInput && (!nameInput.value || nameInput.value === "Nouveau Volet Solaire" || nameInput.value === "Volet Solaire")) {
+              const matched = coverEntities.find(c => c.id === selectedId);
+              if (matched) {
+                nameInput.value = `${matched.name} - Suivi Solaire`;
+              }
+            }
+          }
+        });
+
+        this._setupEntityAutocomplete(modalEl, {
+          inputId: "modal-temp-sensor",
+          dropdownId: "ac-temp-dropdown",
+          hintId: "ac-temp-hint",
+          entities: tempSensorEntities,
+          fallbackEntities: allSensors
+        });
+      } else {
+        const setupTargetAc = () => {
+          const type = modalEl.querySelector("#modal-target-type")?.value || "entity";
+          let entitiesList = allEntitiesList;
+          if (type === "script") entitiesList = allEntitiesList.filter(e => e.id.startsWith("script."));
+          else if (type === "automation") entitiesList = allEntitiesList.filter(e => e.id.startsWith("automation."));
+          else if (type === "scene") entitiesList = allEntitiesList.filter(e => e.id.startsWith("scene."));
+          else if (type === "entity") entitiesList = allEntitiesList;
+          else entitiesList = [];
+
+          this._setupEntityAutocomplete(modalEl, {
+            inputId: "modal-target-val",
+            dropdownId: "ac-target-dropdown",
+            hintId: "ac-target-hint",
+            entities: entitiesList
+          });
+        };
+
+        setupTargetAc();
+        modalEl.querySelector("#modal-target-type")?.addEventListener("change", () => {
+          setupTargetAc();
+        });
+      }
 
       // Gestion des boutons de jours de semaine
       const selectedWeekdays = new Set(s.weekdays || [0, 1, 2, 3, 4]);
@@ -1115,7 +1651,7 @@
   });
 
   console.info(
-    `%c DOMOLINK-PLANIFICATION %c v1.0.1 chargé avec succès `,
+    `%c DOMOLINK-PLANIFICATION %c v1.0.2 chargé avec succès `,
     "background: #3b82f6; color: #fff; font-weight: bold; border-radius: 4px 0 0 4px;",
     "background: #1e293b; color: #60a5fa; border-radius: 0 4px 4px 0;"
   );
