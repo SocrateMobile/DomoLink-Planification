@@ -15,6 +15,8 @@ try:
         TIME_TYPE_FIXED,
         TIME_TYPE_SUNRISE,
         TIME_TYPE_SUNSET,
+        TIME_TYPE_ZONE_ENTER,
+        TIME_TYPE_ZONE_LEAVE,
         TRIGGER_TYPE_SOLAR,
         TRIGGER_TYPE_TIME,
     )
@@ -28,6 +30,8 @@ except (ImportError, ValueError):
         TIME_TYPE_FIXED,
         TIME_TYPE_SUNRISE,
         TIME_TYPE_SUNSET,
+        TIME_TYPE_ZONE_ENTER,
+        TIME_TYPE_ZONE_LEAVE,
         TRIGGER_TYPE_SOLAR,
         TRIGGER_TYPE_TIME,
     )
@@ -37,27 +41,8 @@ class RecurrenceEngine:
     """Moteur pur Python de calcul et de vérification des dates de déclenchement."""
 
     @staticmethod
-    def check_trigger_match(sched: dict[str, Any], now: datetime, sun_target_time: datetime | None = None) -> bool:
-        """Vérifie si la date et l'heure courantes correspondent à la planification."""
-        time_type = sched.get("time_type", TIME_TYPE_FIXED)
-        trigger_type = sched.get("trigger_type", TRIGGER_TYPE_TIME)
-
-        # 1. Vérification de l'heure
-        if time_type in (TIME_TYPE_SUNRISE, TIME_TYPE_SUNSET) or trigger_type == TRIGGER_TYPE_SOLAR:
-            if not sun_target_time:
-                return False
-            if now.hour != sun_target_time.hour or now.minute != sun_target_time.minute:
-                return False
-        else:
-            time_str = sched.get("time", "00:00")
-            try:
-                target_h, target_m = [int(p) for p in time_str.split(":")[:2]]
-                if now.hour != target_h or now.minute != target_m:
-                    return False
-            except Exception:
-                return False
-
-        # 2. Vérification de la fréquence / récurrence
+    def check_date_match(sched: dict[str, Any], now: datetime) -> bool:
+        """Vérifie si le jour, mois, année et jour de semaine correspondent."""
         rec_mode = sched.get("recurrence_mode", RECURRENCE_EVERY)
 
         if rec_mode in (RECURRENCE_EVERY, RECURRENCE_NEXT):
@@ -98,9 +83,40 @@ class RecurrenceEngine:
         return True
 
     @staticmethod
+    def check_trigger_match(sched: dict[str, Any], now: datetime, sun_target_time: datetime | None = None) -> bool:
+        """Vérifie si la date et l'heure courantes correspondent à la planification."""
+        time_type = sched.get("time_type", TIME_TYPE_FIXED)
+        trigger_type = sched.get("trigger_type", TRIGGER_TYPE_TIME)
+
+        # Les déclencheurs de zones sont événementiels et non basés sur l'horloge
+        if time_type in (TIME_TYPE_ZONE_ENTER, TIME_TYPE_ZONE_LEAVE):
+            return False
+
+        # 1. Vérification de l'heure
+        if time_type in (TIME_TYPE_SUNRISE, TIME_TYPE_SUNSET) or trigger_type == TRIGGER_TYPE_SOLAR:
+            if not sun_target_time:
+                return False
+            if now.hour != sun_target_time.hour or now.minute != sun_target_time.minute:
+                return False
+        else:
+            time_str = sched.get("time", "00:00")
+            try:
+                target_h, target_m = [int(p) for p in time_str.split(":")[:2]]
+                if now.hour != target_h or now.minute != target_m:
+                    return False
+            except Exception:
+                return False
+
+        # 2. Vérification de la date / récurrence
+        return RecurrenceEngine.check_date_match(sched, now)
+
+    @staticmethod
     def compute_next_run(sched: dict[str, Any], now: datetime) -> str | None:
         """Calcule la prochaine date/heure d'exécution (format ISO) pour une règle."""
         if not sched.get("enabled", True) or sched.get("is_completed", False):
+            return None
+
+        if sched.get("time_type") in (TIME_TYPE_ZONE_ENTER, TIME_TYPE_ZONE_LEAVE):
             return None
 
         time_str = sched.get("time", "00:00")

@@ -1,0 +1,36 @@
+{
+  "entity": {
+    "sensor": {
+      "next_action": {
+        "default": "mdi:calendar-clock"
+      },
+      "active_schedules": {
+        "default": "mdi:calendar-check"
+      }
+    },
+    "switch": {
+      "master_switch": {
+        "default": "mdi:calendar-sync"
+      }
+    },
+    "button": {
+      "trigger": {
+        "default": "mdi:play-circle-outline"
+      },
+      "refresh": {
+        "default": "mdi:refresh"
+      }
+    }
+  },
+  "services": {
+    "trigger_schedule": {
+      "service": "mdi:play-circle-outline"
+    },
+    "refresh_solar_shading": {
+      "service": "mdi:weather-sunny-alert"
+    },
+    "set_schedule_enabled": {
+      "service": "mdi:toggle-switch-outline"
+    }
+  }
+}

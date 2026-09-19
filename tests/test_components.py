@@ -198,5 +198,35 @@ class TestRecurrenceAndDateModes(unittest.TestCase):
         self.assertFalse(RecurrenceEngine.check_trigger_match(sched, datetime(2026, 9, 7, 14, 0)))
 
 
+class TestZoneTriggers(unittest.TestCase):
+    def test_zone_date_condition(self):
+        # Déclencheur zone_enter actif seulement en semaine (Lun-Ven)
+        sched = {
+            "time_type": "zone_enter",
+            "recurrence_mode": "every",
+            "weekdays": [0, 1, 2, 3, 4],
+            "zone_person_id": "person.jean",
+            "zone_id": "zone.home",
+        }
+        # Vendredi 18 Septembre 2026 -> OK
+        self.assertTrue(RecurrenceEngine.check_date_match(sched, datetime(2026, 9, 18, 17, 30)))
+        # Samedi 19 Septembre 2026 -> Hors jours autorisés
+        self.assertFalse(RecurrenceEngine.check_date_match(sched, datetime(2026, 9, 19, 17, 30)))
+
+    def test_zone_date_mode_exact_day(self):
+        # Déclencheur zone actif le 14 Juillet
+        sched = {
+            "time_type": "zone_leave",
+            "recurrence_mode": "date",
+            "month": 7,
+            "year": "every_year",
+            "date_selection_type": "exact_day",
+            "day_of_month": 14,
+        }
+        self.assertTrue(RecurrenceEngine.check_date_match(sched, datetime(2026, 7, 14, 8, 15)))
+        self.assertFalse(RecurrenceEngine.check_date_match(sched, datetime(2026, 7, 15, 8, 15)))
+
+
 if __name__ == "__main__":
     unittest.main()
+

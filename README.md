@@ -1,11 +1,11 @@
 # 🗓️ DomoLink-Planification
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/default)
-[![version](https://img.shields.io/badge/version-v1.0.0-blue.svg)](https://github.com/SocrateMobile/DomoLink-Planification/releases)
+[![version](https://img.shields.io/badge/version-v1.2.0-blue.svg)](https://github.com/SocrateMobile/DomoLink-Planification/releases)
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.4+-41BDF5.svg)](https://www.home-assistant.io)
 
-**DomoLink-Planification** est une intégration Home Assistant haut de gamme conçue pour orchestrer des déclenchements temporels avancés, des planifications récurrentes contextuelles, et une **gestion bioclimatique solaire ultra-précise des volets roulants**.
+**DomoLink-Planification** est une intégration Home Assistant haut de gamme conçue pour orchestrer des déclenchements temporels avancés, des déclencheurs de présence géolocalisée (zones), des planifications récurrentes contextuelles, et une **gestion bioclimatique solaire ultra-précise des volets roulants**.
 
 ---
 
@@ -18,37 +18,43 @@
   * Si la température dépasse le seuil défini (ex: > 24°C) **ET** que le soleil frappe directement la baie vitrée ➔ Le volet se ferme automatiquement à la position d'ombrage configurée (ex: 20%).
   * Dès que le soleil tourne et quitte la façade ➔ Le volet se rouvre automatiquement (ex: 100%) pour faire entrer la lumière naturelle.
 * **Hystérésis & Anti-battement** : Temporisation intelligente pour éviter l'usure mécanique des moteurs lors d'éclaircies intermittentes.
+* **Autocomplétion intelligente** : Sélecteurs filtrés avec recherche en direct pour les volets (`cover.*`) et capteurs de température (`sensor.*`).
 
 ---
 
-### 2. 🏷️ Cibles Universelles & Étiquettes (Labels HA)
-Déclenchez vos actions sur n'importe quel élément de Home Assistant :
-* **Étiquettes (Labels natifs HA 2024+)** : Ciblez en un mot toutes les entités associées à une étiquette (`label: rez_de_chaussee`, `label: volets`, `label: exterieur`).
-* **Entités directes** : `light.salon`, `cover.volet_cuisine`, `climate.cuisine`, `media_player.salon`...
-* **Zones / Pièces (Areas)** : Toutes les entités d'une pièce.
-* **Scripts, Automatisations & Scènes** : `script.<nom>`, `automation.trigger`, `scene.turn_on`.
-* **Notifications** : Notification push sur smartphone, notification persistante HA, ou annonce vocale TTS sur enceintes connectées.
-* **Séquenceur multi-étapes** : Enchaînement de plusieurs actions espacées dans le temps.
+### 2. 📍 Déclencheurs de Présence & Zones Géographiques
+* **Arrivée dans une zone** (`zone_enter`) : Déclenchement instantané à l'entrée dans une zone.
+* **Sortie d'une zone** (`zone_leave`) : Déclenchement instantané lors du départ d'une zone.
+* **Filtre par personne** : Ciblage d'une personne spécifique (`person.*`, `device_tracker.*`) ou de toute personne indistinctement.
+* **Combinaison temporelle** : Possibilité d'associer un déclencheur de zone à des jours spécifiques de la semaine ou des plages calendaires.
 
 ---
 
-### 3. 🌍 Calendriers & Jours Fériés Multi-Pays (100% Offline)
-Moteur de calcul autonome (sans API externe ni dépendance tierce) pour :
-* 🇫🇷 **France (FR)** : 11 jours fériés civils et religieux + vacances scolaires.
-* 🇺🇸 **États-Unis (US)** : Jours fériés fédéraux (New Year, MLK, Memorial Day, Labor Day, Thanksgiving...).
-* 🇬🇧 **Royaume-Uni (GB)** : Bank Holidays anglais et écossais.
-* 🇮🇹 **Italie (IT)** : Capodanno, Epifania, Pasquetta, Liberazione, Ferragosto...
-* 🇪🇸 **Espagne (ES)** : Año Nuevo, Reyes, Viernes Santo, Fiesta Nacional...
-* 🇩🇪 **Allemagne (DE)** : Neujahr, Karfreitag, Ostermontag, Deutsche Einheit...
-* 🇺🇦 **Ukraine (UA)** : Nouvel An, Pâques orthodoxe, Constitution, Indépendance...
-* **Modes sélectionnables** : *Actif tous les jours*, *Ne pas exécuter les jours fériés*, *Comportement "Week-end" les jours fériés*, *Uniquement les jours fériés*.
+### 3. 🔁 Fréquences Flexibles & Dates Précises
+* **🔁 Tous les** : Répétition hebdomadaire aux jours choisis.
+* **⏩ Prochain** : Exécution unique lors du prochain jour sélectionné, avec option de désactivation ou suppression post-exécution.
+* **📅 Date** : Sélection du mois et de l'année (ou répétition annuelle), avec sous-modes au choix :
+  * *Jour précis (1 à 31)*
+  * *Jours de la semaine dans le mois*
 
 ---
 
-### 4. 🎛️ Panneau Latéral & Carte Lovelace 1-Clic
-* **Panneau latéral dédié** au design Glassmorphism sombre et épuré.
-* **Bouton « Créer carte Lovelace »** : Copie instantanément dans le presse-papier le code YAML prêt à l'emploi pour vos tableaux de bord.
-* **Activable / Désactivable** en un clic dans les options de l'intégration.
+### 4. 🏷️ Cibles Universelles, Étiquettes & Rappels Multi-Canaux
+* **Étiquettes (Labels HA)**, entités directes, pièces (Areas), scripts, automatisations et scènes.
+* **Rappels & Notifications Multi-Canaux** : Envoi de messages personnalisés vers Free Mobile SMS, Telegram, l'application officielle Home Assistant ou notifications persistantes.
+
+---
+
+### 5. 🌍 Calendriers & Jours Fériés Multi-Pays (100% Offline)
+Moteur autonome (sans API tierce) pour :
+* 🇫🇷 **France (FR)**, 🇺🇸 **États-Unis (US)**, 🇬🇧 **Royaume-Uni (GB)**, 🇮🇹 **Italie (IT)**, 🇪🇸 **Espagne (ES)**, 🇩🇪 **Allemagne (DE)**, 🇺🇦 **Ukraine (UA)**.
+* Options : *Actif tous les jours*, *Exclure jours fériés*, *Comportement Week-end*, *Uniquement jours fériés*.
+
+---
+
+### 6. 🎛️ Panneau Latéral Glassmorphism & Badge Bleu France
+* **Badge Bleu France** (`#002395`) avec texte blanc contrasté dans le menu latéral gauche de Home Assistant.
+* **Bouton « Créer carte Lovelace »** en 1-clic copiant le code YAML de la carte personnalisée `domolink-planification-card`.
 
 ---
 
