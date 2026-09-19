@@ -1,0 +1,18 @@
+{
+  "domain": "domolink_planification",
+  "name": "DomoLink-Planification",
+  "codeowners": [
+    "@SocrateMobile",
+    "@jflavigne"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "frontend",
+    "http"
+  ],
+  "documentation": "https://github.com/SocrateMobile/DomoLink-Planification",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/SocrateMobile/DomoLink-Planification/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}

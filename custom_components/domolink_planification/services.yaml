@@ -1,0 +1,34 @@
+trigger_schedule:
+  name: Déclencher une planification
+  description: Déclenche immédiatement l'action d'une planification enregistrée dans DomoLink-Planification.
+  fields:
+    schedule_id:
+      name: Identifiant de la règle
+      description: ID de la règle à déclencher.
+      required: true
+      example: "rule_1710920000"
+      selector:
+        text:
+
+refresh_solar_shading:
+  name: Réévaluer les volets solaires
+  description: Force le calcul immédiat de la trajectoire solaire et ajuste la position de tous les volets roulants configurés.
+
+set_schedule_enabled:
+  name: Activer ou désactiver une planification
+  description: Active ou suspend l'exécution automatique d'une planification.
+  fields:
+    schedule_id:
+      name: Identifiant de la règle
+      description: ID de la règle à modifier.
+      required: true
+      example: "rule_1710920000"
+      selector:
+        text:
+    enabled:
+      name: État d'activation
+      description: Détermine si la règle doit être active ou suspendue.
+      required: true
+      default: true
+      selector:
+        boolean:

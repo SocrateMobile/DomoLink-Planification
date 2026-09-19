@@ -1,0 +1,31 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "DomoLink-Planification",
+        "description": "Configurez les paramètres généraux de l'intégration DomoLink-Planification.",
+        "data": {
+          "enable_panel": "Afficher le panneau dans le menu latéral",
+          "default_country": "Pays par défaut pour les jours fériés",
+          "default_holiday_mode": "Gestion des jours fériés"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "L'intégration DomoLink-Planification est déjà configurée."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options de DomoLink-Planification",
+        "description": "Modifiez les préférences d'affichage et de calendrier.",
+        "data": {
+          "enable_panel": "Afficher le panneau dans le menu latéral",
+          "default_country": "Pays par défaut pour les jours fériés",
+          "default_holiday_mode": "Gestion des jours fériés"
+        }
+      }
+    }
+  }
+}
