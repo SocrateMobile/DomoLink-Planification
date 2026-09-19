@@ -14,11 +14,23 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    DATE_MODE_EXACT_DAY,
+    DATE_MODE_WEEKDAYS,
     DOMAIN,
     HOLIDAY_MODE_ALWAYS,
     HOLIDAY_MODE_EXCLUDE,
     HOLIDAY_MODE_ONLY,
     HOLIDAY_MODE_WEEKEND,
+    POST_EXEC_ACTION_DELETE,
+    POST_EXEC_ACTION_DISABLE,
+    RECURRENCE_DATE,
+    RECURRENCE_EVERY,
+    RECURRENCE_NEXT,
+    REMINDER_CHANNEL_APP,
+    TARGET_TYPE_REMINDER,
+    TIME_TYPE_FIXED,
+    TIME_TYPE_SUNRISE,
+    TIME_TYPE_SUNSET,
     TRIGGER_TYPE_INTERVAL,
     TRIGGER_TYPE_ONCE,
     TRIGGER_TYPE_SOLAR,
@@ -26,6 +38,7 @@ from .const import (
     TRIGGER_TYPE_TIME,
 )
 from .holidays import HolidayEngine
+from .recurrence import RecurrenceEngine
 from .solar_shading import SolarShadingEvaluator
 from .storage import PlanificationStorage
 from .target_resolver import TargetResolver
@@ -158,7 +171,7 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         country = settings.get("country", "FR")
 
         for sched_id, sched in list(schedules.items()):
-            if not sched.get("enabled", True):
+            if not sched.get("enabled", True) or sched.get("is_completed", False):
                 continue
 
             trigger_type = sched.get("trigger_type", TRIGGER_TYPE_TIME)
@@ -183,10 +196,15 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Déclenchement de l'action
             _LOGGER.info("DomoLink-Planification [%s] Déclenchement de l'action...", sched.get("name"))
+            action_data = dict(sched.get("action_data", {}))
+            if sched.get("target_type") == TARGET_TYPE_REMINDER:
+                action_data["reminder_message"] = sched.get("reminder_message") or sched.get("target_value")
+                action_data["channel"] = sched.get("reminder_channel") or REMINDER_CHANNEL_APP
+
             success = await self.resolver.execute_action(
                 target_type=sched.get("target_type"),
                 target_value=sched.get("target_value"),
-                action_data=sched.get("action_data", {}),
+                action_data=action_data,
             )
 
             # Enregistrer dans l'historique
@@ -198,90 +216,55 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "details": f"Cible: {sched.get('target_type')} ({sched.get('target_value')})",
             })
 
-            # Si c'était un déclencheur ponctuel (One-shot), désactiver la règle
-            if trigger_type == TRIGGER_TYPE_ONCE:
-                sched["enabled"] = False
-                await self.storage.async_save_schedule(sched_id, sched)
+            # Gestion post-exécution selon le mode de récurrence (Option B: Supprimer ou Désactiver)
+            recurrence_mode = sched.get("recurrence_mode", RECURRENCE_EVERY)
+            post_action = sched.get("post_execution_action", POST_EXEC_ACTION_DISABLE)
+
+            if recurrence_mode == RECURRENCE_NEXT or trigger_type == TRIGGER_TYPE_ONCE:
+                if post_action == POST_EXEC_ACTION_DELETE:
+                    _LOGGER.info("DomoLink-Planification: Suppression automatique de '%s' après exécution", sched.get("name"))
+                    await self.storage.async_delete_schedule(sched_id)
+                else:
+                    sched["enabled"] = False
+                    sched["is_completed"] = True
+                    await self.storage.async_save_schedule(sched_id, sched)
+
+            elif recurrence_mode == RECURRENCE_DATE:
+                year_val = sched.get("year")
+                date_mode = sched.get("date_selection_type", DATE_MODE_EXACT_DAY)
+                # Si année fixe et jour unique : marquer comme terminé ou supprimer
+                if year_val != "every_year" and date_mode == DATE_MODE_EXACT_DAY:
+                    if post_action == POST_EXEC_ACTION_DELETE:
+                        _LOGGER.info("DomoLink-Planification: Suppression de la règle de date '%s' après exécution", sched.get("name"))
+                        await self.storage.async_delete_schedule(sched_id)
+                    else:
+                        sched["enabled"] = False
+                        sched["is_completed"] = True
+                        await self.storage.async_save_schedule(sched_id, sched)
 
     def _check_trigger_match(self, sched: dict[str, Any], now: datetime) -> bool:
         """Vérifie si l'heure et la date courantes correspondent au déclencheur."""
+        time_type = sched.get("time_type", TIME_TYPE_FIXED)
         trigger_type = sched.get("trigger_type", TRIGGER_TYPE_TIME)
+        sun_target_time = None
 
-        # 1. Ponctuel (Date & Heure précises ISO)
-        if trigger_type == TRIGGER_TYPE_ONCE:
-            target_iso = sched.get("target_datetime")
-            if not target_iso:
-                return False
-            try:
-                target_dt = dt_util.parse_datetime(target_iso)
-                if not target_dt:
-                    return False
-                target_local = dt_util.as_local(target_dt)
-                return (
-                    now.year == target_local.year
-                    and now.month == target_local.month
-                    and now.day == target_local.day
-                    and now.hour == target_local.hour
-                    and now.minute == target_local.minute
-                )
-            except Exception:
-                return False
-
-        # 2. Heure quotidienne / hebdomadaire
-        if trigger_type == TRIGGER_TYPE_TIME:
-            target_time_str = sched.get("time", "00:00")
-            try:
-                target_h, target_m = [int(p) for p in target_time_str.split(":")[:2]]
-            except Exception:
-                return False
-
-            if now.hour != target_h or now.minute != target_m:
-                return False
-
-            # Vérifier les jours de la semaine (0=Lundi, 6=Dimanche)
-            weekdays = sched.get("weekdays")
-            if weekdays is not None and len(weekdays) > 0:
-                if now.weekday() not in weekdays:
-                    return False
-
-            # Vérifier les mois sélectionnés si spécifiés
-            months = sched.get("months")
-            if months is not None and len(months) > 0:
-                if now.month not in months:
-                    return False
-
-            # Vérifier les jours du mois si spécifiés
-            days_of_month = sched.get("days_of_month")
-            if days_of_month is not None and len(days_of_month) > 0:
-                if now.day not in days_of_month:
-                    return False
-
-            return True
-
-        # 3. Événement Solaire (Lever / Coucher de soleil)
-        if trigger_type == TRIGGER_TYPE_SOLAR:
-            solar_event = sched.get("solar_event", "sunset")
+        if time_type in (TIME_TYPE_SUNRISE, TIME_TYPE_SUNSET) or trigger_type == TRIGGER_TYPE_SOLAR:
+            solar_event = sched.get("solar_event") or ("sunrise" if time_type == TIME_TYPE_SUNRISE else "sunset")
             offset_minutes = int(sched.get("solar_offset_minutes", 0))
 
             sun_state = self.hass.states.get("sun.sun")
-            if not sun_state:
-                return False
+            if sun_state:
+                attr_key = "next_rising" if solar_event == "sunrise" else "next_setting"
+                event_iso = sun_state.attributes.get(attr_key)
+                if event_iso:
+                    try:
+                        event_dt = dt_util.parse_datetime(event_iso)
+                        if event_dt:
+                            sun_target_time = dt_util.as_local(event_dt) + timedelta(minutes=offset_minutes)
+                    except Exception:
+                        pass
 
-            attr_key = "next_rising" if solar_event == "sunrise" else "next_setting"
-            event_iso = sun_state.attributes.get(attr_key)
-            if not event_iso:
-                return False
-
-            try:
-                event_dt = dt_util.parse_datetime(event_iso)
-                if not event_dt:
-                    return False
-                target_time = dt_util.as_local(event_dt) + timedelta(minutes=offset_minutes)
-                return now.hour == target_time.hour and now.minute == target_time.minute
-            except Exception:
-                return False
-
-        return False
+        return RecurrenceEngine.check_trigger_match(sched, now, sun_target_time)
 
     def _check_conditions(self, sched: dict[str, Any], now: datetime, country: str) -> tuple[bool, str]:
         """Vérifie si toutes les conditions de garde-fous sont réunies."""
@@ -339,7 +322,7 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         results: dict[str, str | None] = {}
 
         for sched_id, sched in schedules.items():
-            if not sched.get("enabled", True):
+            if not sched.get("enabled", True) or sched.get("is_completed", False):
                 results[sched_id] = None
                 continue
 
@@ -352,20 +335,7 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 results[sched_id] = sched.get("target_datetime")
                 continue
 
-            if t_type == TRIGGER_TYPE_TIME:
-                time_str = sched.get("time", "00:00")
-                try:
-                    h, m = [int(p) for p in time_str.split(":")[:2]]
-                    # Chercher dans les 7 prochains jours
-                    for day_offset in range(14):
-                        candidate_dt = now.replace(hour=h, minute=m, second=0, microsecond=0) + timedelta(days=day_offset)
-                        if candidate_dt > now:
-                            weekdays = sched.get("weekdays")
-                            if weekdays is None or len(weekdays) == 0 or candidate_dt.weekday() in weekdays:
-                                results[sched_id] = candidate_dt.isoformat()
-                                break
-                except Exception:
-                    results[sched_id] = None
+            results[sched_id] = RecurrenceEngine.compute_next_run(sched, now)
 
         return results
 

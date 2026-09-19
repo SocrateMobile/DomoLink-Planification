@@ -14,11 +14,16 @@ from homeassistant.helpers import (
 )
 
 from .const import (
+    REMINDER_CHANNEL_APP,
+    REMINDER_CHANNEL_FREE,
+    REMINDER_CHANNEL_PERSISTENT,
+    REMINDER_CHANNEL_TELEGRAM,
     TARGET_TYPE_AREA,
     TARGET_TYPE_AUTOMATION,
     TARGET_TYPE_ENTITY,
     TARGET_TYPE_LABEL,
     TARGET_TYPE_NOTIFICATION,
+    TARGET_TYPE_REMINDER,
     TARGET_TYPE_SCENE,
     TARGET_TYPE_SCRIPT,
     TARGET_TYPE_SEQUENCE,
@@ -165,21 +170,57 @@ class TargetResolver:
                         await asyncio.sleep(delay)
                 return True
 
-            # Notification
-            if target_type == TARGET_TYPE_NOTIFICATION:
-                msg = action_data.get("message", "Alerte DomoLink-Planification")
+            # Rappels & Notifications multi-canaux (App Companion, Free Mobile SMS, Telegram, Persistant)
+            if target_type in (TARGET_TYPE_NOTIFICATION, TARGET_TYPE_REMINDER):
+                msg = action_data.get("message") or action_data.get("reminder_message") or str(target_value or "Rappel DomoLink-Planification")
                 title = action_data.get("title", "DomoLink-Planification")
-                notify_service = action_data.get("notify_service", "notify")
-                domain = "notify"
-                service = notify_service.replace("notify.", "") if "." in notify_service else notify_service
+                channel = action_data.get("channel") or action_data.get("reminder_channel") or REMINDER_CHANNEL_APP
 
-                await self.hass.services.async_call(
-                    domain,
-                    service,
-                    {"message": msg, "title": title},
-                    blocking=True,
-                )
-                return True
+                # 1. SMS via Free Mobile
+                if channel in (REMINDER_CHANNEL_FREE, "free_mobile", "free_sms"):
+                    if self.hass.services.has_service("notify", "free_mobile"):
+                        await self.hass.services.async_call("notify", "free_mobile", {"message": f"{title} : {msg}"}, blocking=True)
+                        return True
+                    elif self.hass.services.has_service("free_mobile", "send_sms"):
+                        await self.hass.services.async_call("free_mobile", "send_sms", {"message": f"{title} : {msg}"}, blocking=True)
+                        return True
+                    else:
+                        _LOGGER.warning("Service Free Mobile non configuré, repli vers notify.notify")
+                        await self.hass.services.async_call("notify", "notify", {"title": title, "message": f"[SMS Free] {msg}"}, blocking=True)
+                        return True
+
+                # 2. Telegram
+                elif channel == REMINDER_CHANNEL_TELEGRAM:
+                    if self.hass.services.has_service("telegram_bot", "send_message"):
+                        await self.hass.services.async_call("telegram_bot", "send_message", {"title": title, "message": msg}, blocking=True)
+                        return True
+                    elif self.hass.services.has_service("notify", "telegram"):
+                        await self.hass.services.async_call("notify", "telegram", {"title": title, "message": msg}, blocking=True)
+                        return True
+                    else:
+                        _LOGGER.warning("Service Telegram non configuré, repli vers notify.notify")
+                        await self.hass.services.async_call("notify", "notify", {"title": title, "message": f"[Telegram] {msg}"}, blocking=True)
+                        return True
+
+                # 3. Notification Persistante dans Home Assistant
+                elif channel == REMINDER_CHANNEL_PERSISTENT:
+                    await self.hass.services.async_call(
+                        "persistent_notification",
+                        "create",
+                        {"title": title, "message": msg, "notification_id": f"domolink_reminder_{hash(msg)}"},
+                        blocking=True,
+                    )
+                    return True
+
+                # 4. Application Mobile HA / Service de notification personnalisé
+                else:
+                    notify_service = action_data.get("notify_service")
+                    if notify_service and "." in notify_service:
+                        dom, srv = notify_service.split(".", 1)
+                        await self.hass.services.async_call(dom, srv, {"title": title, "message": msg}, blocking=True)
+                    else:
+                        await self.hass.services.async_call("notify", "notify", {"title": title, "message": msg}, blocking=True)
+                    return True
 
             # Scripts
             if target_type == TARGET_TYPE_SCRIPT:

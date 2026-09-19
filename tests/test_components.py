@@ -1,7 +1,7 @@
 """Tests unitaires pour les calculs de jours fériés et de suivi solaire."""
 
 import unittest
-from datetime import date
+from datetime import date, datetime
 
 import sys
 import os
@@ -106,6 +106,96 @@ class TestSolarShading(unittest.TestCase):
         # Soleil sous l'horizon (-5°)
         striking, _ = is_sun_striking_window(180.0, 180.0, -5.0)
         self.assertFalse(striking)
+
+
+
+from recurrence import RecurrenceEngine
+
+
+class TestRecurrenceAndDateModes(unittest.TestCase):
+    """Vérification des modes de récurrence (Tous les, Prochain, Date)."""
+
+    def test_recurrence_every_matching(self):
+        # Dimanche 20 Septembre 2026 à 07:30
+        now = datetime(2026, 9, 20, 7, 30)  # weekday 6 = Dimanche
+        sched = {
+            "recurrence_mode": "every",
+            "time": "07:30",
+            "weekdays": [5, 6],  # Samedi, Dimanche
+        }
+        self.assertTrue(RecurrenceEngine.check_trigger_match(sched, now))
+
+        # Test mauvais jour (Lundi 21 Septembre 2026)
+        now_monday = datetime(2026, 9, 21, 7, 30)
+        self.assertFalse(RecurrenceEngine.check_trigger_match(sched, now_monday))
+
+    def test_recurrence_next_mode(self):
+        # Prochain Mardi
+        now_sunday = datetime(2026, 9, 20, 10, 0)
+        sched = {
+            "recurrence_mode": "next",
+            "time": "18:00",
+            "weekdays": [1],  # Mardi
+            "enabled": True,
+        }
+        # Prochain mardi = 22 Septembre 2026
+        next_run = RecurrenceEngine.compute_next_run(sched, now_sunday)
+        self.assertIsNotNone(next_run)
+        self.assertTrue(next_run.startswith("2026-09-22T18:00:00"))
+
+    def test_recurrence_date_exact_day(self):
+        # 25 Décembre 2026 à 08:00
+        now_christmas = datetime(2026, 12, 25, 8, 0)
+        sched = {
+            "recurrence_mode": "date",
+            "time": "08:00",
+            "month": 12,
+            "year": 2026,
+            "date_selection_type": "exact_day",
+            "day_of_month": 25,
+        }
+        self.assertTrue(RecurrenceEngine.check_trigger_match(sched, now_christmas))
+
+        # Mauvais jour (24 Décembre)
+        now_eve = datetime(2026, 12, 24, 8, 0)
+        self.assertFalse(RecurrenceEngine.check_trigger_match(sched, now_eve))
+
+        # Même jour autre année (2027)
+        now_2027 = datetime(2027, 12, 25, 8, 0)
+        self.assertFalse(RecurrenceEngine.check_trigger_match(sched, now_2027))
+
+    def test_recurrence_date_every_year(self):
+        sched = {
+            "recurrence_mode": "date",
+            "time": "09:00",
+            "month": 7,
+            "year": "every_year",
+            "date_selection_type": "exact_day",
+            "day_of_month": 14,
+        }
+        # 14 Juillet 2026
+        self.assertTrue(RecurrenceEngine.check_trigger_match(sched, datetime(2026, 7, 14, 9, 0)))
+        # 14 Juillet 2027
+        self.assertTrue(RecurrenceEngine.check_trigger_match(sched, datetime(2027, 7, 14, 9, 0)))
+        # 15 Juillet 2026
+        self.assertFalse(RecurrenceEngine.check_trigger_match(sched, datetime(2026, 7, 15, 9, 0)))
+
+    def test_recurrence_date_weekdays_in_month(self):
+        # Tous les Lundis d'Août 2026
+        sched = {
+            "recurrence_mode": "date",
+            "time": "14:00",
+            "month": 8,
+            "year": 2026,
+            "date_selection_type": "weekdays",
+            "weekdays": [0],  # Lundi
+        }
+        # 3 Août 2026 est un Lundi
+        self.assertTrue(RecurrenceEngine.check_trigger_match(sched, datetime(2026, 8, 3, 14, 0)))
+        # 4 Août 2026 est un Mardi
+        self.assertFalse(RecurrenceEngine.check_trigger_match(sched, datetime(2026, 8, 4, 14, 0)))
+        # 7 Septembre 2026 est un Lundi mais mois de Septembre
+        self.assertFalse(RecurrenceEngine.check_trigger_match(sched, datetime(2026, 9, 7, 14, 0)))
 
 
 if __name__ == "__main__":

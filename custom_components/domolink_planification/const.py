@@ -4,7 +4,7 @@ from typing import Final
 
 DOMAIN: Final = "domolink_planification"
 NAME: Final = "DomoLink-Planification"
-VERSION: Final = "1.0.2"
+VERSION: Final = "1.1.0"
 
 # Panneau Lovelace & Frontend
 PANEL_URL_PATH: Final = "domolink-planification"
@@ -19,6 +19,24 @@ CONF_ENABLE_PANEL: Final = "enable_panel"
 CONF_DEFAULT_COUNTRY: Final = "default_country"
 CONF_DEFAULT_HOLIDAY_MODE: Final = "default_holiday_mode"
 
+# Modes de fréquence / récurrence
+RECURRENCE_EVERY: Final = "every"      # Tous les jours sélectionnés
+RECURRENCE_NEXT: Final = "next"        # Prochaine occurrence unique
+RECURRENCE_DATE: Final = "date"        # Date précise ou mois/année
+
+# Sous-modes de sélection de date
+DATE_MODE_EXACT_DAY: Final = "exact_day"  # Jour précis du mois (1 à 31)
+DATE_MODE_WEEKDAYS: Final = "weekdays"    # Jours de la semaine dans le mois
+
+# Actions post-exécution (pour Prochain ou Date ponctuelle)
+POST_EXEC_ACTION_DISABLE: Final = "disable"  # Désactiver la règle
+POST_EXEC_ACTION_DELETE: Final = "delete"    # Supprimer la règle
+
+# Types d'heure / déclenchement solaire
+TIME_TYPE_FIXED: Final = "fixed"      # Heure fixe (HH:MM)
+TIME_TYPE_SUNRISE: Final = "sunrise"  # Lever du soleil
+TIME_TYPE_SUNSET: Final = "sunset"    # Coucher du soleil
+
 # Types de cibles
 TARGET_TYPE_ENTITY: Final = "entity"
 TARGET_TYPE_LABEL: Final = "label"
@@ -27,7 +45,15 @@ TARGET_TYPE_SCRIPT: Final = "script"
 TARGET_TYPE_AUTOMATION: Final = "automation"
 TARGET_TYPE_SCENE: Final = "scene"
 TARGET_TYPE_NOTIFICATION: Final = "notification"
+TARGET_TYPE_REMINDER: Final = "reminder"
 TARGET_TYPE_SEQUENCE: Final = "sequence"
+
+# Canaux de rappel / notification
+REMINDER_CHANNEL_APP: Final = "app"
+REMINDER_CHANNEL_FREE: Final = "free_mobile"
+REMINDER_CHANNEL_FREE_SMS: Final = "free_sms"
+REMINDER_CHANNEL_TELEGRAM: Final = "telegram"
+REMINDER_CHANNEL_PERSISTENT: Final = "persistent"
 
 # Types de déclencheurs
 TRIGGER_TYPE_TIME: Final = "time"

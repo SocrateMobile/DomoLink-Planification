@@ -1,5 +1,5 @@
 /**
- * DomoLink-Planification — Panneau Tactile & Carte Lovelace (v1.0.2)
+ * DomoLink-Planification — Panneau Tactile & Carte Lovelace (v1.1.0)
  * Glassmorphism sombre, suivi solaire bioclimatique des volets, gestion multi-pays des jours fériés.
  */
 
@@ -44,6 +44,28 @@
     { id: 4, label: "Ven" },
     { id: 5, label: "Sam" },
     { id: 6, label: "Dim" },
+  ];
+
+  const MONTHS_LIST = [
+    { val: 1, label: "01 - Janvier" },
+    { val: 2, label: "02 - Février" },
+    { val: 3, label: "03 - Mars" },
+    { val: 4, label: "04 - Avril" },
+    { val: 5, label: "05 - Mai" },
+    { val: 6, label: "06 - Juin" },
+    { val: 7, label: "07 - Juillet" },
+    { val: 8, label: "08 - Août" },
+    { val: 9, label: "09 - Septembre" },
+    { val: 10, label: "10 - Octobre" },
+    { val: 11, label: "11 - Novembre" },
+    { val: 12, label: "12 - Décembre" },
+  ];
+
+  const REMINDER_CHANNELS = [
+    { id: "app", label: "📱 Application Mobile (HA Companion / Notify)" },
+    { id: "free_mobile", label: "💬 SMS Free Mobile" },
+    { id: "telegram", label: "✈️ Telegram" },
+    { id: "persistent", label: "🔔 Notification Persistante HA" },
   ];
 
   const STYLES = `
@@ -381,6 +403,96 @@
       border-color: #60a5fa;
     }
 
+    /* Segmented Controls & Frequency Buttons */
+    .segmented-control {
+      display: flex;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 10px;
+      padding: 4px;
+      gap: 4px;
+      margin-bottom: 12px;
+    }
+    .segmented-btn {
+      flex: 1;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #94a3b8;
+      background: transparent;
+      border: none;
+      border-radius: 7px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .segmented-btn:hover:not(.active) {
+      color: #f1f5f9;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    .segmented-btn.active {
+      color: #fff;
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
+    }
+
+    /* Sub Tabs inside Date picker */
+    .sub-tabs {
+      display: flex;
+      gap: 8px;
+      margin: 12px 0 10px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 6px;
+    }
+    .sub-tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: #94a3b8;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .sub-tab-btn:hover:not(.active) {
+      color: #cbd5e1;
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .sub-tab-btn.active {
+      color: #60a5fa;
+      background: rgba(59, 130, 246, 0.15);
+      border-color: rgba(59, 130, 246, 0.35);
+    }
+
+    /* Countdown & Info Badges */
+    .countdown-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      color: #60a5fa;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .info-banner {
+      background: rgba(59, 130, 246, 0.08);
+      border-left: 3px solid #3b82f6;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 12px;
+      color: #cbd5e1;
+      margin-top: 8px;
+      line-height: 1.4;
+    }
+
     /* Autocomplete Dropdown Component */
     .ac-wrapper {
       position: relative;
@@ -673,17 +785,47 @@
       await this._fetchData();
     }
 
+    _formatCountdown(isoString) {
+      if (!isoString || !isoString.includes("T")) return null;
+      try {
+        const targetTime = new Date(isoString).getTime();
+        const diffMs = targetTime - Date.now();
+        if (diffMs <= 0) return "Imminent";
+        const totalMinutes = Math.floor(diffMs / 60000);
+        const totalHours = Math.floor(totalMinutes / 60);
+        const days = Math.floor(totalHours / 24);
+        const remHours = totalHours % 24;
+        const remMinutes = totalMinutes % 60;
+        if (days > 0) return `dans ${days}j ${remHours}h`;
+        if (totalHours > 0) return `dans ${totalHours}h ${remMinutes}m`;
+        return `dans ${remMinutes}m`;
+      } catch (e) {
+        return null;
+      }
+    }
+
     _openScheduleModal(sched = null, isSolar = false) {
-      this._editingSchedule = sched ? JSON.parse(JSON.stringify(sched)) : {
+      const now = new Date();
+      const defaultSched = {
         id: "",
         name: isSolar ? "Volet Salon - Suivi Solaire" : "Nouvelle Planification",
         enabled: true,
         trigger_type: isSolar ? "solar_shading" : "time",
+        time_type: "fixed",
         time: "07:30",
+        solar_offset_minutes: 0,
+        recurrence_mode: "every",
+        date_selection_type: "exact_day",
+        month: now.getMonth() + 1,
+        year: now.getFullYear(),
+        day_of_month: now.getDate(),
         weekdays: [0, 1, 2, 3, 4],
+        post_execution_action: "disable",
         target_type: isSolar ? "entity" : "label",
         target_value: "",
         action_service: "turn_on",
+        reminder_channel: "app",
+        reminder_message: "",
         cover_entity_id: "",
         orientation: "S",
         temperature_sensor_id: "",
@@ -692,6 +834,7 @@
         open_position: 100,
         holiday_mode: "always",
       };
+      this._editingSchedule = sched ? Object.assign(defaultSched, JSON.parse(JSON.stringify(sched))) : defaultSched;
       this._renderModal();
     }
 
@@ -942,23 +1085,76 @@
 
     _renderScheduleCard(sched) {
       const isEnabled = sched.enabled !== false;
+      const isCompleted = sched.is_completed === true;
       const nextRun = (this._data.next_runs || {})[sched.id] || "Calcul en cours...";
       const nextRunFormatted = nextRun.includes("T") ? new Date(nextRun).toLocaleString() : nextRun;
+      const countdown = this._formatCountdown(nextRun);
+
+      // Déclencheur textuel
+      let triggerDesc = "";
+      if (sched.time_type === "sunrise") {
+        const off = sched.solar_offset_minutes || 0;
+        triggerDesc = `🌅 Lever du soleil (${off >= 0 ? "+" : ""}${off} min)`;
+      } else if (sched.time_type === "sunset") {
+        const off = sched.solar_offset_minutes || 0;
+        triggerDesc = `🌇 Coucher du soleil (${off >= 0 ? "+" : ""}${off} min)`;
+      } else {
+        triggerDesc = `🕒 Heure fixe (${sched.time || "07:30"})`;
+      }
+
+      // Badge de Fréquence / Périodicité
+      let recurrenceBadge = "";
+      const rec = sched.recurrence_mode || "every";
+      if (rec === "every") {
+        const days = (sched.weekdays || []).map(d => (WEEKDAYS_LABELS.find(w => w.id === d) || {}).label || d).join(", ") || "Tous les jours";
+        recurrenceBadge = `<span class="badge badge-info">🔁 Tous les : ${days}</span>`;
+      } else if (rec === "next") {
+        const days = (sched.weekdays || []).map(d => (WEEKDAYS_LABELS.find(w => w.id === d) || {}).label || d).join(", ") || "Prochain jour";
+        recurrenceBadge = `<span class="badge badge-warning">⏩ Prochain : ${days}</span>`;
+      } else if (rec === "date") {
+        const mLabel = (MONTHS_LIST.find(m => m.val === parseInt(sched.month, 10)) || {}).label || `Mois ${sched.month}`;
+        const yLabel = sched.year === "every_year" ? "Chaque année" : sched.year;
+        if (sched.date_selection_type === "weekdays") {
+          const days = (sched.weekdays || []).map(d => (WEEKDAYS_LABELS.find(w => w.id === d) || {}).label || d).join(", ");
+          recurrenceBadge = `<span class="badge badge-info">📅 ${mLabel} (${yLabel}) [${days}]</span>`;
+        } else {
+          recurrenceBadge = `<span class="badge badge-info">📅 Le ${sched.day_of_month || 1} ${mLabel} (${yLabel})</span>`;
+        }
+      }
+
+      // Cible ou Rappel
+      let targetDesc = "";
+      if (sched.target_type === "reminder") {
+        const ch = (REMINDER_CHANNELS.find(c => c.id === sched.reminder_channel) || {}).label || sched.reminder_channel || "Notification";
+        targetDesc = `🔔 <strong>Rappel [${ch}]</strong> : <span style="color:#e2e8f0;">"${sched.reminder_message || ''}"</span>`;
+      } else {
+        targetDesc = `${sched.target_type} ➔ <code>${sched.target_value}</code> (${sched.action_service || 'turn_on'})`;
+      }
 
       return `
-        <div class="card" data-id="${sched.id}">
+        <div class="card" data-id="${sched.id}" style="${isCompleted ? 'opacity: 0.65;' : ''}">
           <div>
             <div class="card-header">
-              <h3 class="card-title">${sched.name}</h3>
+              <div>
+                <h3 class="card-title">${sched.name}</h3>
+                <div style="margin-top: 6px; display:flex; gap:6px; flex-wrap:wrap;">
+                  ${recurrenceBadge}
+                  ${isCompleted ? '<span class="badge badge-disabled">Terminé</span>' : ''}
+                </div>
+              </div>
               <label class="switch">
-                <input type="checkbox" class="toggle-schedule" ${isEnabled ? "checked" : ""}>
+                <input type="checkbox" class="toggle-schedule" ${isEnabled && !isCompleted ? "checked" : ""} ${isCompleted ? "disabled" : ""}>
                 <span class="slider"></span>
               </label>
             </div>
             <div class="card-details">
-              <div><span class="label">Déclencheur :</span> ${sched.trigger_type === 'time' ? `Heure fixe (${sched.time})` : sched.trigger_type}</div>
-              <div><span class="label">Cible :</span> ${sched.target_type} ➔ <code>${sched.target_value}</code></div>
-              <div><span class="label">Prochaine :</span> <strong style="color:#60a5fa;">${nextRunFormatted}</strong></div>
+              <div><span class="label">Déclencheur :</span> ${triggerDesc}</div>
+              <div><span class="label">Action / Cible :</span> ${targetDesc}</div>
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:2px;">
+                <span class="label">Prochaine :</span>
+                <strong style="color:#60a5fa;">${isCompleted ? 'Exécution unique terminée' : nextRunFormatted}</strong>
+                ${!isCompleted && countdown ? `<span class="countdown-badge">⏳ ${countdown}</span>` : ''}
+              </div>
               <div><span class="label">Jours Fériés :</span> ${sched.holiday_mode || 'Actif'}</div>
             </div>
           </div>
@@ -1397,21 +1593,116 @@
               </div>
             </div>
           ` : `
+            <!-- 1. Déclenchement Temporel & Solaire -->
             <div class="form-group">
-              <label>Heure de déclenchement</label>
-              <input type="time" class="form-control" id="modal-time" value="${s.time || '07:30'}">
-            </div>
+              <label>Moment du déclenchement</label>
+              <div class="segmented-control" id="ctrl-time-type">
+                <button type="button" class="segmented-btn ${(s.time_type === 'fixed' || !s.time_type) ? 'active' : ''}" data-type="fixed">🕒 Heure fixe</button>
+                <button type="button" class="segmented-btn ${s.time_type === 'sunrise' ? 'active' : ''}" data-type="sunrise">🌅 Lever du soleil</button>
+                <button type="button" class="segmented-btn ${s.time_type === 'sunset' ? 'active' : ''}" data-type="sunset">🌇 Coucher du soleil</button>
+              </div>
 
-            <div class="form-group">
-              <label>Jours de la semaine</label>
-              <div class="weekday-selector" id="weekday-selector">
-                ${WEEKDAYS_LABELS.map(w => {
-                  const isSel = (s.weekdays || [0,1,2,3,4]).includes(w.id);
-                  return `<div class="day-btn ${isSel ? 'selected' : ''}" data-day="${w.id}">${w.label}</div>`;
-                }).join("")}
+              <div id="section-fixed-time" style="${(s.time_type === 'fixed' || !s.time_type) ? '' : 'display:none;'}">
+                <input type="time" class="form-control" id="modal-time" value="${s.time || '07:30'}">
+              </div>
+
+              <div id="section-solar-offset" style="${(s.time_type === 'sunrise' || s.time_type === 'sunset') ? '' : 'display:none;'}">
+                <div style="display:flex; align-items:center; gap: 10px;">
+                  <label style="margin:0; font-size:12px; white-space:nowrap;">Décalage (minutes) :</label>
+                  <input type="number" class="form-control" id="modal-solar-offset" value="${s.solar_offset_minutes !== undefined ? s.solar_offset_minutes : 0}" step="5" style="max-width: 120px;">
+                  <span style="font-size:12px; color:#94a3b8;">(- avant, + après)</span>
+                </div>
               </div>
             </div>
 
+            <!-- 2. Sélecteur de Fréquence & Périodicité -->
+            <div class="form-group">
+              <label>Fréquence & Répétition</label>
+              <div class="segmented-control" id="ctrl-recurrence-mode">
+                <button type="button" class="segmented-btn ${(s.recurrence_mode === 'every' || !s.recurrence_mode) ? 'active' : ''}" data-mode="every">🔁 Tous les</button>
+                <button type="button" class="segmented-btn ${s.recurrence_mode === 'next' ? 'active' : ''}" data-mode="next">⏩ Prochain</button>
+                <button type="button" class="segmented-btn ${s.recurrence_mode === 'date' ? 'active' : ''}" data-mode="date">📅 Date</button>
+              </div>
+
+              <!-- Mode [ 🔁 Tous les ] -->
+              <div id="freq-section-every" style="${(s.recurrence_mode === 'every' || !s.recurrence_mode) ? '' : 'display:none;'}">
+                <div class="weekday-selector" id="weekday-selector-every">
+                  ${WEEKDAYS_LABELS.map(w => {
+                    const isSel = (s.weekdays || [0,1,2,3,4]).includes(w.id);
+                    return `<div class="day-btn ${isSel ? 'selected' : ''}" data-day="${w.id}">${w.label}</div>`;
+                  }).join("")}
+                </div>
+                <div class="info-banner">Exécution récurrente chaque semaine aux jours choisis.</div>
+              </div>
+
+              <!-- Mode [ ⏩ Prochain ] -->
+              <div id="freq-section-next" style="${s.recurrence_mode === 'next' ? '' : 'display:none;'}">
+                <div class="weekday-selector" id="weekday-selector-next">
+                  ${WEEKDAYS_LABELS.map(w => {
+                    const isSel = (s.weekdays || [0]).includes(w.id);
+                    return `<div class="day-btn ${isSel ? 'selected' : ''}" data-day="${w.id}">${w.label}</div>`;
+                  }).join("")}
+                </div>
+                <div class="info-banner">S'exécutera une seule fois lors du prochain jour sélectionné.</div>
+              </div>
+
+              <!-- Mode [ 📅 Date ] -->
+              <div id="freq-section-date" style="${s.recurrence_mode === 'date' ? '' : 'display:none;'}">
+                <div style="display:flex; gap: 12px; margin-bottom: 12px;">
+                  <div style="flex:1;">
+                    <label style="font-size:12px;">Mois</label>
+                    <select class="form-control" id="modal-date-month">
+                      ${MONTHS_LIST.map(m => `<option value="${m.val}" ${m.val === parseInt(s.month || (new Date().getMonth() + 1), 10) ? 'selected' : ''}>${m.label}</option>`).join("")}
+                    </select>
+                  </div>
+                  <div style="flex:1;">
+                    <label style="font-size:12px;">Année</label>
+                    <select class="form-control" id="modal-date-year">
+                      <option value="every_year" ${s.year === 'every_year' ? 'selected' : ''}>🔁 Chaque année (Annuel)</option>
+                      ${[2026, 2027, 2028, 2029, 2030].map(y => `<option value="${y}" ${String(s.year || new Date().getFullYear()) === String(y) ? 'selected' : ''}>${y}</option>`).join("")}
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Option C Sub-Tabs -->
+                <div class="sub-tabs">
+                  <button type="button" class="sub-tab-btn ${s.date_selection_type !== 'weekdays' ? 'active' : ''}" id="tab-date-exact">📍 Jour précis (1 à 31)</button>
+                  <button type="button" class="sub-tab-btn ${s.date_selection_type === 'weekdays' ? 'active' : ''}" id="tab-date-weekdays">🗓️ Jours de la semaine</button>
+                </div>
+
+                <!-- Sub-tab Exact day -->
+                <div id="subtab-exact-content" style="${s.date_selection_type !== 'weekdays' ? '' : 'display:none;'}">
+                  <div style="display:flex; align-items:center; gap: 10px;">
+                    <label style="margin:0; font-size:12px; white-space:nowrap;">Numéro du jour (1-31) :</label>
+                    <select class="form-control" id="modal-date-day" style="max-width: 100px;">
+                      ${Array.from({ length: 31 }, (_, i) => i + 1).map(d => `<option value="${d}" ${d === parseInt(s.day_of_month || new Date().getDate(), 10) ? 'selected' : ''}>${d < 10 ? '0' + d : d}</option>`).join("")}
+                    </select>
+                  </div>
+                </div>
+
+                <!-- Sub-tab Weekdays in month -->
+                <div id="subtab-weekdays-content" style="${s.date_selection_type === 'weekdays' ? '' : 'display:none;'}">
+                  <div class="weekday-selector" id="weekday-selector-date">
+                    ${WEEKDAYS_LABELS.map(w => {
+                      const isSel = (s.weekdays || [0,1,2,3,4]).includes(w.id);
+                      return `<div class="day-btn ${isSel ? 'selected' : ''}" data-day="${w.id}">${w.label}</div>`;
+                    }).join("")}
+                  </div>
+                  <div class="info-banner">S'exécutera tous les jours choisis du mois configuré.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Option B: Action post-exécution pour exécution unique (Prochain ou Date fixe) -->
+            <div class="form-group" id="group-post-exec" style="${(s.recurrence_mode === 'next' || (s.recurrence_mode === 'date' && s.year !== 'every_year')) ? '' : 'display:none;'}">
+              <label>Action après l'exécution de cette règle unique</label>
+              <select class="form-control" id="modal-post-exec">
+                <option value="disable" ${s.post_execution_action !== 'delete' ? 'selected' : ''}>⏸️ Désactiver la règle (Conserver dans la liste)</option>
+                <option value="delete" ${s.post_execution_action === 'delete' ? 'selected' : ''}>🗑️ Supprimer automatiquement la règle</option>
+              </select>
+            </div>
+
+            <!-- 3. Cible et Action -->
             <div class="form-group">
               <label>Type de Cible</label>
               <select class="form-control" id="modal-target-type">
@@ -1421,40 +1712,59 @@
                 <option value="script" ${s.target_type === 'script' ? 'selected' : ''}>📜 Script</option>
                 <option value="automation" ${s.target_type === 'automation' ? 'selected' : ''}>⚙️ Automatisation</option>
                 <option value="scene" ${s.target_type === 'scene' ? 'selected' : ''}>🎬 Scène</option>
+                <option value="reminder" ${s.target_type === 'reminder' ? 'selected' : ''}>🔔 Rappel / Notification</option>
               </select>
             </div>
 
-            <div class="form-group" id="group-target-val">
-              <label id="label-target-val">Cible</label>
-              <div class="ac-wrapper" id="ac-target-wrapper">
-                <div class="ac-input-group">
-                  <input type="text" class="form-control ac-input" id="modal-target-val" 
-                         placeholder="Saisissez ou recherchez la cible..." 
-                         value="${s.target_value || ''}" autocomplete="off">
-                  <div class="ac-controls">
-                    <button type="button" class="ac-btn ac-clear-btn" title="Effacer la saisie">✕</button>
-                    <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste">▼</button>
+            <!-- Cible Standard -->
+            <div id="section-standard-target" style="${s.target_type === 'reminder' ? 'display:none;' : ''}">
+              <div class="form-group" id="group-target-val">
+                <label id="label-target-val">Cible</label>
+                <div class="ac-wrapper" id="ac-target-wrapper">
+                  <div class="ac-input-group">
+                    <input type="text" class="form-control ac-input" id="modal-target-val" 
+                           placeholder="Saisissez ou recherchez la cible..." 
+                           value="${s.target_type !== 'reminder' ? (s.target_value || '') : ''}" autocomplete="off">
+                    <div class="ac-controls">
+                      <button type="button" class="ac-btn ac-clear-btn" title="Effacer la saisie">✕</button>
+                      <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste">▼</button>
+                    </div>
                   </div>
+                  <div class="ac-dropdown" id="ac-target-dropdown"></div>
                 </div>
-                <div class="ac-dropdown" id="ac-target-dropdown"></div>
+                <div class="ac-selection-hint" id="ac-target-hint" style="${s.target_value && s.target_type !== 'reminder' ? '' : 'display:none;'}">
+                  ${s.target_value && states[s.target_value] ? `
+                    Sélectionné : <strong>${states[s.target_value].attributes?.friendly_name || s.target_value}</strong>
+                  ` : ''}
+                </div>
               </div>
-              <div class="ac-selection-hint" id="ac-target-hint" style="${s.target_value ? '' : 'display:none;'}">
-                ${s.target_value && states[s.target_value] ? `
-                  Sélectionné : <strong>${states[s.target_value].attributes?.friendly_name || s.target_value}</strong>
-                ` : ''}
+
+              <div class="form-group">
+                <label>Action à exécuter</label>
+                <select class="form-control" id="modal-action-service">
+                  <option value="turn_on" ${s.action_service === 'turn_on' ? 'selected' : ''}>Allumer / Activer (turn_on)</option>
+                  <option value="turn_off" ${s.action_service === 'turn_off' ? 'selected' : ''}>Éteindre / Désactiver (turn_off)</option>
+                  <option value="toggle" ${s.action_service === 'toggle' ? 'selected' : ''}>Basculer (toggle)</option>
+                  <option value="open_cover" ${s.action_service === 'open_cover' ? 'selected' : ''}>Ouvrir volet (open_cover)</option>
+                  <option value="close_cover" ${s.action_service === 'close_cover' ? 'selected' : ''}>Fermer volet (close_cover)</option>
+                  <option value="trigger" ${s.action_service === 'trigger' ? 'selected' : ''}>Déclencher (trigger)</option>
+                </select>
               </div>
             </div>
 
-            <div class="form-group">
-              <label>Action à exécuter</label>
-              <select class="form-control" id="modal-action-service">
-                <option value="turn_on" ${s.action_service === 'turn_on' ? 'selected' : ''}>Allumer / Activer (turn_on)</option>
-                <option value="turn_off" ${s.action_service === 'turn_off' ? 'selected' : ''}>Éteindre / Désactiver (turn_off)</option>
-                <option value="toggle" ${s.action_service === 'toggle' ? 'selected' : ''}>Basculer (toggle)</option>
-                <option value="open_cover" ${s.action_service === 'open_cover' ? 'selected' : ''}>Ouvrir volet (open_cover)</option>
-                <option value="close_cover" ${s.action_service === 'close_cover' ? 'selected' : ''}>Fermer volet (close_cover)</option>
-                <option value="trigger" ${s.action_service === 'trigger' ? 'selected' : ''}>Déclencher (trigger)</option>
-              </select>
+            <!-- Section Rappel / Multi-Canal (SMS Free, Telegram, App Mobile, Persistant) -->
+            <div id="section-reminder-target" style="${s.target_type === 'reminder' ? '' : 'display:none;'}">
+              <div class="form-group">
+                <label>Canal d'envoi du Rappel</label>
+                <select class="form-control" id="modal-reminder-channel">
+                  ${REMINDER_CHANNELS.map(ch => `<option value="${ch.id}" ${s.reminder_channel === ch.id ? 'selected' : ''}>${ch.label}</option>`).join("")}
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Message du Rappel</label>
+                <textarea class="form-control" id="modal-reminder-msg" rows="3" placeholder="Ex: Penser à sortir les poubelles, arroser les plantes, rendez-vous...">${s.reminder_message || ''}</textarea>
+              </div>
             </div>
 
             <div class="form-group">
@@ -1514,6 +1824,7 @@
       } else {
         const setupTargetAc = () => {
           const type = modalEl.querySelector("#modal-target-type")?.value || "entity";
+          if (type === "reminder") return;
           let entitiesList = allEntitiesList;
           if (type === "script") entitiesList = allEntitiesList.filter(e => e.id.startsWith("script."));
           else if (type === "automation") entitiesList = allEntitiesList.filter(e => e.id.startsWith("automation."));
@@ -1530,22 +1841,112 @@
         };
 
         setupTargetAc();
-        modalEl.querySelector("#modal-target-type")?.addEventListener("change", () => {
-          setupTargetAc();
+
+        // 1. Boutons Type de Déclenchement (fixed / sunrise / sunset)
+        modalEl.querySelectorAll("#ctrl-time-type .segmented-btn").forEach(btn => {
+          btn.addEventListener("click", (e) => {
+            modalEl.querySelectorAll("#ctrl-time-type .segmented-btn").forEach(b => b.classList.remove("active"));
+            e.currentTarget.classList.add("active");
+            const type = e.currentTarget.dataset.type;
+            const secFixed = modalEl.querySelector("#section-fixed-time");
+            const secSolar = modalEl.querySelector("#section-solar-offset");
+            if (type === "fixed") {
+              if (secFixed) secFixed.style.display = "";
+              if (secSolar) secSolar.style.display = "none";
+            } else {
+              if (secFixed) secFixed.style.display = "none";
+              if (secSolar) secSolar.style.display = "";
+            }
+          });
+        });
+
+        // 2. Boutons Fréquence & Répétition (every / next / date)
+        const updatePostExecVisibility = () => {
+          const activeRecBtn = modalEl.querySelector("#ctrl-recurrence-mode .segmented-btn.active");
+          const mode = activeRecBtn ? activeRecBtn.dataset.mode : "every";
+          const yearVal = modalEl.querySelector("#modal-date-year")?.value;
+          const postExecGroup = modalEl.querySelector("#group-post-exec");
+          if (!postExecGroup) return;
+          if (mode === "next" || (mode === "date" && yearVal !== "every_year")) {
+            postExecGroup.style.display = "";
+          } else {
+            postExecGroup.style.display = "none";
+          }
+        };
+
+        modalEl.querySelectorAll("#ctrl-recurrence-mode .segmented-btn").forEach(btn => {
+          btn.addEventListener("click", (e) => {
+            modalEl.querySelectorAll("#ctrl-recurrence-mode .segmented-btn").forEach(b => b.classList.remove("active"));
+            e.currentTarget.classList.add("active");
+            const mode = e.currentTarget.dataset.mode;
+            const secEvery = modalEl.querySelector("#freq-section-every");
+            const secNext = modalEl.querySelector("#freq-section-next");
+            const secDate = modalEl.querySelector("#freq-section-date");
+            if (secEvery) secEvery.style.display = mode === "every" ? "" : "none";
+            if (secNext) secNext.style.display = mode === "next" ? "" : "none";
+            if (secDate) secDate.style.display = mode === "date" ? "" : "none";
+            updatePostExecVisibility();
+          });
+        });
+
+        modalEl.querySelector("#modal-date-year")?.addEventListener("change", updatePostExecVisibility);
+
+        // 3. Sub-tabs Option C (Jour précis vs Jours de la semaine)
+        const tabExact = modalEl.querySelector("#tab-date-exact");
+        const tabWeekdays = modalEl.querySelector("#tab-date-weekdays");
+        const contentExact = modalEl.querySelector("#subtab-exact-content");
+        const contentWeekdays = modalEl.querySelector("#subtab-weekdays-content");
+
+        if (tabExact && tabWeekdays) {
+          tabExact.addEventListener("click", () => {
+            tabExact.classList.add("active");
+            tabWeekdays.classList.remove("active");
+            if (contentExact) contentExact.style.display = "";
+            if (contentWeekdays) contentWeekdays.style.display = "none";
+          });
+          tabWeekdays.addEventListener("click", () => {
+            tabWeekdays.classList.add("active");
+            tabExact.classList.remove("active");
+            if (contentExact) contentExact.style.display = "none";
+            if (contentWeekdays) contentWeekdays.style.display = "";
+          });
+        }
+
+        // 4. Bascule Type de Cible (Standard vs Rappel Multi-canal)
+        modalEl.querySelector("#modal-target-type")?.addEventListener("change", (e) => {
+          const val = e.target.value;
+          const secStd = modalEl.querySelector("#section-standard-target");
+          const secRem = modalEl.querySelector("#section-reminder-target");
+          if (val === "reminder") {
+            if (secStd) secStd.style.display = "none";
+            if (secRem) secRem.style.display = "";
+          } else {
+            if (secStd) secStd.style.display = "";
+            if (secRem) secRem.style.display = "none";
+            setupTargetAc();
+          }
         });
       }
 
-      // Gestion des boutons de jours de semaine
+      // Gestion des boutons de jours de semaine (toutes sections confondues)
       const selectedWeekdays = new Set(s.weekdays || [0, 1, 2, 3, 4]);
       modalEl.querySelectorAll(".day-btn").forEach(btn => {
         btn.addEventListener("click", (e) => {
           const day = parseInt(e.currentTarget.dataset.day, 10);
-          if (selectedWeekdays.has(day)) {
-            selectedWeekdays.delete(day);
-            e.currentTarget.classList.remove("selected");
-          } else {
-            selectedWeekdays.add(day);
+          const parent = e.currentTarget.parentElement;
+          if (parent && parent.id === "weekday-selector-next") {
+            parent.querySelectorAll(".day-btn").forEach(b => b.classList.remove("selected"));
             e.currentTarget.classList.add("selected");
+            selectedWeekdays.clear();
+            selectedWeekdays.add(day);
+          } else {
+            if (selectedWeekdays.has(day)) {
+              selectedWeekdays.delete(day);
+              e.currentTarget.classList.remove("selected");
+            } else {
+              selectedWeekdays.add(day);
+              e.currentTarget.classList.add("selected");
+            }
           }
         });
       });
@@ -1561,15 +1962,62 @@
           s.shading_position = parseInt(modalEl.querySelector("#modal-pos-shading").value, 10);
           s.open_position = parseInt(modalEl.querySelector("#modal-pos-open").value, 10);
         } else {
-          s.time = modalEl.querySelector("#modal-time").value;
-          s.weekdays = Array.from(selectedWeekdays).sort();
+          // Time type & offset
+          const activeTimeBtn = modalEl.querySelector("#ctrl-time-type .segmented-btn.active");
+          s.time_type = activeTimeBtn ? activeTimeBtn.dataset.type : "fixed";
+          if (s.time_type === "fixed") {
+            s.time = modalEl.querySelector("#modal-time").value || "07:30";
+          } else {
+            s.solar_offset_minutes = parseInt(modalEl.querySelector("#modal-solar-offset").value || "0", 10);
+          }
+
+          // Recurrence mode
+          const activeRecBtn = modalEl.querySelector("#ctrl-recurrence-mode .segmented-btn.active");
+          s.recurrence_mode = activeRecBtn ? activeRecBtn.dataset.mode : "every";
+
+          if (s.recurrence_mode === "every") {
+            s.weekdays = Array.from(selectedWeekdays).sort();
+          } else if (s.recurrence_mode === "next") {
+            s.weekdays = Array.from(selectedWeekdays).sort();
+            s.post_execution_action = modalEl.querySelector("#modal-post-exec")?.value || "disable";
+          } else if (s.recurrence_mode === "date") {
+            s.month = parseInt(modalEl.querySelector("#modal-date-month").value, 10);
+            const yrVal = modalEl.querySelector("#modal-date-year").value;
+            s.year = yrVal === "every_year" ? "every_year" : parseInt(yrVal, 10);
+
+            const isExact = modalEl.querySelector("#tab-date-exact")?.classList.contains("active");
+            s.date_selection_type = isExact ? "exact_day" : "weekdays";
+
+            if (isExact) {
+              s.day_of_month = parseInt(modalEl.querySelector("#modal-date-day").value, 10);
+            } else {
+              s.weekdays = Array.from(selectedWeekdays).sort();
+            }
+
+            if (s.year !== "every_year") {
+              s.post_execution_action = modalEl.querySelector("#modal-post-exec")?.value || "disable";
+            }
+          }
+
           s.target_type = modalEl.querySelector("#modal-target-type").value;
-          s.target_value = modalEl.querySelector("#modal-target-val").value.trim();
+          if (s.target_type === "reminder") {
+            s.reminder_channel = modalEl.querySelector("#modal-reminder-channel").value;
+            s.reminder_message = modalEl.querySelector("#modal-reminder-msg").value.trim();
+            s.target_value = s.reminder_channel;
+            s.action_service = "notify";
+            s.action_data = {
+              channel: s.reminder_channel,
+              message: s.reminder_message
+            };
+          } else {
+            s.target_value = modalEl.querySelector("#modal-target-val").value.trim();
+            s.action_service = modalEl.querySelector("#modal-action-service").value;
+            s.action_data = {
+              service: s.action_service,
+            };
+          }
+
           s.holiday_mode = modalEl.querySelector("#modal-holiday-mode").value;
-          s.action_service = modalEl.querySelector("#modal-action-service").value;
-          s.action_data = {
-            service: s.action_service,
-          };
         }
         this._saveScheduleFromModal();
       });
@@ -1651,7 +2099,7 @@
   });
 
   console.info(
-    `%c DOMOLINK-PLANIFICATION %c v1.0.2 chargé avec succès `,
+    `%c DOMOLINK-PLANIFICATION %c v1.1.0 chargé avec succès `,
     "background: #3b82f6; color: #fff; font-weight: bold; border-radius: 4px 0 0 4px;",
     "background: #1e293b; color: #60a5fa; border-radius: 0 4px 4px 0;"
   );
