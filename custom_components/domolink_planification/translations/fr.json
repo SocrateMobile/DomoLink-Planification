@@ -27,5 +27,36 @@
         }
       }
     }
+  },
+  "services": {
+    "trigger_schedule": {
+      "name": "Déclencher une planification",
+      "description": "Exécute immédiatement l'action d'une planification enregistrée.",
+      "fields": {
+        "schedule_id": {
+          "name": "Identifiant de la règle",
+          "description": "ID de la règle à déclencher."
+        }
+      }
+    },
+    "refresh_solar_shading": {
+      "name": "Réévaluer les volets solaires",
+      "description": "Force le calcul immédiat de la trajectoire solaire et ajuste la position des volets.",
+      "fields": {}
+    },
+    "set_schedule_enabled": {
+      "name": "Activer/Désactiver une planification",
+      "description": "Active ou suspend l'exécution d'une planification.",
+      "fields": {
+        "schedule_id": {
+          "name": "Identifiant de la règle",
+          "description": "ID de la règle à modifier."
+        },
+        "enabled": {
+          "name": "État d'activation",
+          "description": "Détermine si la règle doit être active ou suspendue."
+        }
+      }
+    }
   }
 }

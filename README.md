@@ -1,7 +1,7 @@
-# 🗓️ DomoLink-Planification
+# <p align="center"><img src="images/icon@2x.png" alt="DomoLink-Planification Logo" width="120"><br>🗓️ DomoLink-Planification</p>
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/default)
-[![version](https://img.shields.io/badge/version-v1.2.0-blue.svg)](https://github.com/SocrateMobile/DomoLink-Planification/releases)
+[![version](https://img.shields.io/badge/version-v1.3.0-blue.svg)](https://github.com/SocrateMobile/DomoLink-Planification/releases)
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.4+-41BDF5.svg)](https://www.home-assistant.io)
 

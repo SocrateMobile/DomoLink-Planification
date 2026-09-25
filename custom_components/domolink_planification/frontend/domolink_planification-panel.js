@@ -1,5 +1,5 @@
 /**
- * DomoLink-Planification — Panneau Tactile & Carte Lovelace (v1.2.0)
+ * DomoLink-Planification — Panneau Tactile & Carte Lovelace (v1.3.0)
  * Glassmorphism sombre, suivi solaire bioclimatique des volets, gestion multi-pays des jours fériés.
  */
 
@@ -102,15 +102,34 @@
       gap: 16px;
     }
     .header-icon {
-      font-size: 32px;
       width: 48px;
       height: 48px;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+      background: linear-gradient(135deg, #0ea5e9, #0284c7);
+      border-radius: 14px;
+      box-shadow: 0 4px 16px rgba(14, 165, 233, 0.4);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .header-icon img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .header-icon ha-icon {
+      --mdc-icon-size: 28px;
+      color: #ffffff;
+    }
+    .btn ha-icon, .btn-icon ha-icon {
+      --mdc-icon-size: 18px;
+    }
+    .badge ha-icon {
+      --mdc-icon-size: 13px;
+    }
+    .tab ha-icon {
+      --mdc-icon-size: 18px;
     }
     .header-title h1 {
       margin: 0;
@@ -180,6 +199,9 @@
       overflow-x: auto;
     }
     .tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
       padding: 10px 16px;
       border-radius: 8px;
       cursor: pointer;
@@ -877,24 +899,39 @@
         
         <div class="header">
           <div class="header-left">
-            <div class="header-icon">🗓️</div>
+            <div class="header-icon">
+              <img src="/domolink_planification_panel/icon.png" alt="DomoLink Logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+              <ha-icon icon="mdi:calendar-clock" style="display:none;"></ha-icon>
+            </div>
             <div class="header-title">
               <h1>DomoLink-Planification</h1>
               <p>Moteur d'automatisation temporelle & gestion bioclimatique des volets</p>
             </div>
           </div>
           <div class="header-actions">
-            <button class="btn btn-clipboard" id="btn-copy-card">📋 Créer carte Lovelace</button>
-            <button class="btn btn-primary" id="btn-add-schedule">+ Planification</button>
-            <button class="btn btn-primary" id="btn-add-solar">+ Volet Solaire</button>
+            <button class="btn btn-clipboard" id="btn-copy-card"><ha-icon icon="mdi:content-copy"></ha-icon> <span>Carte Lovelace</span></button>
+            <button class="btn btn-primary" id="btn-add-schedule"><ha-icon icon="mdi:plus-circle-outline"></ha-icon> <span>Planification</span></button>
+            <button class="btn btn-primary" id="btn-add-solar"><ha-icon icon="mdi:weather-sunny-alert"></ha-icon> <span>Volet Solaire</span></button>
           </div>
         </div>
 
         <div class="tabs">
-          <div class="tab ${this._activeTab === 'schedules' ? 'active' : ''}" data-tab="schedules">🕒 Planifications (${timeSchedules.length})</div>
-          <div class="tab ${this._activeTab === 'solar' ? 'active' : ''}" data-tab="solar">☀️ Volets Solaires (${solarSchedules.length})</div>
-          <div class="tab ${this._activeTab === 'history' ? 'active' : ''}" data-tab="history">📜 Historique Audit</div>
-          <div class="tab ${this._activeTab === 'settings' ? 'active' : ''}" data-tab="settings">⚙️ Paramètres</div>
+          <div class="tab ${this._activeTab === 'schedules' ? 'active' : ''}" data-tab="schedules">
+            <ha-icon icon="mdi:calendar-clock"></ha-icon>
+            <span>Planifications (${timeSchedules.length})</span>
+          </div>
+          <div class="tab ${this._activeTab === 'solar' ? 'active' : ''}" data-tab="solar">
+            <ha-icon icon="mdi:weather-sunny"></ha-icon>
+            <span>Volets Solaires (${solarSchedules.length})</span>
+          </div>
+          <div class="tab ${this._activeTab === 'history' ? 'active' : ''}" data-tab="history">
+            <ha-icon icon="mdi:history"></ha-icon>
+            <span>Historique Audit</span>
+          </div>
+          <div class="tab ${this._activeTab === 'settings' ? 'active' : ''}" data-tab="settings">
+            <ha-icon icon="mdi:cog-outline"></ha-icon>
+            <span>Paramètres</span>
+          </div>
         </div>
 
         <div id="tab-content">
@@ -994,10 +1031,12 @@
         if (timeSchedules.length === 0) {
           return `
             <div style="text-align: center; padding: 60px 24px; background: rgba(30,41,59,0.4); border-radius: 16px; border: 1px dashed rgba(255,255,255,0.15);">
-              <div style="font-size: 48px; margin-bottom: 12px;">🗓️</div>
+              <div class="header-icon" style="margin: 0 auto 16px auto; width: 64px; height: 64px;">
+                <ha-icon icon="mdi:calendar-clock" style="--mdc-icon-size:36px; color:#fff;"></ha-icon>
+              </div>
               <p style="font-size: 18px; color: #f1f5f9; font-weight: 600; margin: 0 0 8px 0;">Aucune planification temporelle active.</p>
               <p style="font-size: 13px; color: #94a3b8; margin: 0 0 20px 0;">Créez votre première règle pour déclencher des actions, scripts ou étiquettes.</p>
-              <button class="btn btn-primary" id="btn-empty-add" style="font-size: 15px; padding: 12px 24px;">+ Créer une première règle</button>
+              <button class="btn btn-primary" id="btn-empty-add" style="font-size: 15px; padding: 12px 24px;"><ha-icon icon="mdi:plus-circle-outline"></ha-icon> <span>Créer une première règle</span></button>
             </div>
           `;
         }
@@ -1030,10 +1069,12 @@
           <div class="grid">
             ${solarSchedules.length === 0 ? `
               <div style="grid-column: 1/-1; text-align: center; padding: 60px 24px; background: rgba(30,41,59,0.4); border-radius: 16px; border: 1px dashed rgba(255,255,255,0.15);">
-                <div style="font-size: 48px; margin-bottom: 12px;">☀️</div>
+                <div class="header-icon" style="margin: 0 auto 16px auto; width: 64px; height: 64px; background: linear-gradient(135deg, #f59e0b, #d97706);">
+                  <ha-icon icon="mdi:weather-sunny" style="--mdc-icon-size:36px; color:#fff;"></ha-icon>
+                </div>
                 <p style="font-size: 18px; color: #f1f5f9; font-weight: 600; margin: 0 0 8px 0;">Aucun volet configuré pour le suivi solaire.</p>
                 <p style="font-size: 13px; color: #94a3b8; margin: 0 0 20px 0;">Associez l'orientation de vos façades à la trajectoire solaire pour un confort d'été optimal.</p>
-                <button class="btn btn-primary" id="btn-solar-empty-add" style="font-size: 15px; padding: 12px 24px;">+ Configurer un volet solaire</button>
+                <button class="btn btn-primary" id="btn-solar-empty-add" style="font-size: 15px; padding: 12px 24px;"><ha-icon icon="mdi:plus-circle-outline"></ha-icon> <span>Configurer un volet solaire</span></button>
               </div>
             ` : solarSchedules.map(sched => this._renderSolarCard(sched)).join("")}
           </div>
@@ -1061,7 +1102,8 @@
                       <td style="padding: 12px 20px; font-weight: 600; color: #f8fafc;">${item.name}</td>
                       <td style="padding: 12px 20px;">
                         <span class="badge ${item.status === 'SUCCESS' ? 'badge-success' : (item.status === 'SKIPPED' ? 'badge-warning' : 'badge-info')}">
-                          ${item.status}
+                          <ha-icon icon="${item.status === 'SUCCESS' ? 'mdi:check-circle-outline' : (item.status === 'SKIPPED' ? 'mdi:skip-next-circle-outline' : 'mdi:information-outline')}"></ha-icon>
+                          <span>${item.status}</span>
                         </span>
                       </td>
                       <td style="padding: 12px 20px; color: #cbd5e1;">${item.details || '-'}</td>
@@ -1084,7 +1126,7 @@
                 ${COUNTRIES.map(c => `<option value="${c.code}" ${c.code === currentCountry ? 'selected' : ''}>${c.name}</option>`).join("")}
               </select>
             </div>
-            <button class="btn btn-primary" id="btn-save-settings">Enregistrer les paramètres</button>
+            <button class="btn btn-primary" id="btn-save-settings"><ha-icon icon="mdi:content-save-outline"></ha-icon> <span>Enregistrer les paramètres</span></button>
           </div>
         `;
       }
@@ -1102,10 +1144,10 @@
       let triggerDesc = "";
       if (sched.time_type === "sunrise") {
         const off = sched.solar_offset_minutes || 0;
-        triggerDesc = `🌅 Lever du soleil (${off >= 0 ? "+" : ""}${off} min)`;
+        triggerDesc = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:weather-sunset-up" style="--mdc-icon-size:15px;color:#f59e0b;"></ha-icon> Lever du soleil (${off >= 0 ? "+" : ""}${off} min)</span>`;
       } else if (sched.time_type === "sunset") {
         const off = sched.solar_offset_minutes || 0;
-        triggerDesc = `🌇 Coucher du soleil (${off >= 0 ? "+" : ""}${off} min)`;
+        triggerDesc = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:weather-sunset-down" style="--mdc-icon-size:15px;color:#f97316;"></ha-icon> Coucher du soleil (${off >= 0 ? "+" : ""}${off} min)</span>`;
       } else if (sched.time_type === "zone_enter" || sched.time_type === "zone_leave") {
         const states = (this._hass && this._hass.states) ? this._hass.states : {};
         const isEnter = sched.time_type === "zone_enter";
@@ -1115,10 +1157,10 @@
         const rawZone = zId.replace("zone.", "");
         const zName = states[zId]?.attributes?.friendly_name || (rawZone.charAt(0).toUpperCase() + rawZone.slice(1));
         triggerDesc = isEnter
-          ? `📍 Arrivée de <strong>${pName}</strong> dans <strong>${zName}</strong>`
-          : `🚪 Sortie de <strong>${pName}</strong> de <strong>${zName}</strong>`;
+          ? `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:map-marker-radius" style="--mdc-icon-size:15px;color:#10b981;"></ha-icon> Arrivée de <strong>${pName}</strong> dans <strong>${zName}</strong></span>`
+          : `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:map-marker-minus" style="--mdc-icon-size:15px;color:#ef4444;"></ha-icon> Sortie de <strong>${pName}</strong> de <strong>${zName}</strong></span>`;
       } else {
-        triggerDesc = `🕒 Heure fixe (${sched.time || "07:30"})`;
+        triggerDesc = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:clock-outline" style="--mdc-icon-size:15px;color:#38bdf8;"></ha-icon> Heure fixe (${sched.time || "07:30"})</span>`;
       }
 
       // Badge de Fréquence / Périodicité
@@ -1126,18 +1168,18 @@
       const rec = sched.recurrence_mode || "every";
       if (rec === "every") {
         const days = (sched.weekdays || []).map(d => (WEEKDAYS_LABELS.find(w => w.id === d) || {}).label || d).join(", ") || "Tous les jours";
-        recurrenceBadge = `<span class="badge badge-info">🔁 Tous les : ${days}</span>`;
+        recurrenceBadge = `<span class="badge badge-info"><ha-icon icon="mdi:repeat"></ha-icon> <span>Tous les : ${days}</span></span>`;
       } else if (rec === "next") {
         const days = (sched.weekdays || []).map(d => (WEEKDAYS_LABELS.find(w => w.id === d) || {}).label || d).join(", ") || "Prochain jour";
-        recurrenceBadge = `<span class="badge badge-warning">⏩ Prochain : ${days}</span>`;
+        recurrenceBadge = `<span class="badge badge-warning"><ha-icon icon="mdi:fast-forward"></ha-icon> <span>Prochain : ${days}</span></span>`;
       } else if (rec === "date") {
         const mLabel = (MONTHS_LIST.find(m => m.val === parseInt(sched.month, 10)) || {}).label || `Mois ${sched.month}`;
         const yLabel = sched.year === "every_year" ? "Chaque année" : sched.year;
         if (sched.date_selection_type === "weekdays") {
           const days = (sched.weekdays || []).map(d => (WEEKDAYS_LABELS.find(w => w.id === d) || {}).label || d).join(", ");
-          recurrenceBadge = `<span class="badge badge-info">📅 ${mLabel} (${yLabel}) [${days}]</span>`;
+          recurrenceBadge = `<span class="badge badge-info"><ha-icon icon="mdi:calendar-month-outline"></ha-icon> <span>${mLabel} (${yLabel}) [${days}]</span></span>`;
         } else {
-          recurrenceBadge = `<span class="badge badge-info">📅 Le ${sched.day_of_month || 1} ${mLabel} (${yLabel})</span>`;
+          recurrenceBadge = `<span class="badge badge-info"><ha-icon icon="mdi:calendar-month-outline"></ha-icon> <span>Le ${sched.day_of_month || 1} ${mLabel} (${yLabel})</span></span>`;
         }
       }
 
@@ -1145,9 +1187,9 @@
       let targetDesc = "";
       if (sched.target_type === "reminder") {
         const ch = (REMINDER_CHANNELS.find(c => c.id === sched.reminder_channel) || {}).label || sched.reminder_channel || "Notification";
-        targetDesc = `🔔 <strong>Rappel [${ch}]</strong> : <span style="color:#e2e8f0;">"${sched.reminder_message || ''}"</span>`;
+        targetDesc = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:bell-ring-outline" style="--mdc-icon-size:15px;color:#a855f7;"></ha-icon> <strong>Rappel [${ch}]</strong> : <span style="color:#e2e8f0;">"${sched.reminder_message || ''}"</span></span>`;
       } else {
-        targetDesc = `${sched.target_type} ➔ <code>${sched.target_value}</code> (${sched.action_service || 'turn_on'})`;
+        targetDesc = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:lightning-bolt-outline" style="--mdc-icon-size:15px;color:#38bdf8;"></ha-icon> ${sched.target_type} ➔ <code>${sched.target_value}</code> (${sched.action_service || 'turn_on'})</span>`;
       }
 
       return `
@@ -1172,15 +1214,15 @@
               <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:2px;">
                 <span class="label">Prochaine :</span>
                 <strong style="color:#60a5fa;">${isCompleted ? 'Exécution unique terminée' : nextRunFormatted}</strong>
-                ${!isCompleted && countdown ? `<span class="countdown-badge">⏳ ${countdown}</span>` : ''}
+                ${!isCompleted && countdown ? `<span class="countdown-badge"><ha-icon icon="mdi:timer-sand"></ha-icon> ${countdown}</span>` : ''}
               </div>
               <div><span class="label">Jours Fériés :</span> ${sched.holiday_mode || 'Actif'}</div>
             </div>
           </div>
           <div class="card-actions">
-            <button class="btn-icon trigger-btn" title="Tester maintenant">▶️</button>
-            <button class="btn-icon edit-btn" title="Modifier">✏️</button>
-            <button class="btn-icon delete delete-btn" title="Supprimer">🗑️</button>
+            <button class="btn-icon trigger-btn" title="Tester maintenant"><ha-icon icon="mdi:play"></ha-icon></button>
+            <button class="btn-icon edit-btn" title="Modifier"><ha-icon icon="mdi:pencil-outline"></ha-icon></button>
+            <button class="btn-icon delete delete-btn" title="Supprimer"><ha-icon icon="mdi:trash-can-outline"></ha-icon></button>
           </div>
         </div>
       `;
@@ -1190,8 +1232,8 @@
       const isEnabled = sched.enabled !== false;
       const state = (this._data.solar_states || {})[sched.id] || {};
       const statusBadge = state.should_shade ? 
-        `<span class="badge badge-warning">☀️ Fermé Solaire (${sched.shading_position}%)</span>` :
-        `<span class="badge badge-success">🌤️ Ouvert (${sched.open_position}%)</span>`;
+        `<span class="badge badge-warning"><ha-icon icon="mdi:weather-sunny"></ha-icon> <span>Fermé Solaire (${sched.shading_position}%)</span></span>` :
+        `<span class="badge badge-success"><ha-icon icon="mdi:weather-partly-cloudy"></ha-icon> <span>Ouvert (${sched.open_position}%)</span></span>`;
 
       return `
         <div class="card" data-id="${sched.id}">
@@ -1215,9 +1257,9 @@
             </div>
           </div>
           <div class="card-actions">
-            <button class="btn-icon trigger-btn" title="Réévaluer">🔄</button>
-            <button class="btn-icon edit-btn" title="Modifier">✏️</button>
-            <button class="btn-icon delete delete-btn" title="Supprimer">🗑️</button>
+            <button class="btn-icon trigger-btn" title="Réévaluer"><ha-icon icon="mdi:refresh"></ha-icon></button>
+            <button class="btn-icon edit-btn" title="Modifier"><ha-icon icon="mdi:pencil-outline"></ha-icon></button>
+            <button class="btn-icon delete delete-btn" title="Supprimer"><ha-icon icon="mdi:trash-can-outline"></ha-icon></button>
           </div>
         </div>
       `;
@@ -1649,11 +1691,11 @@
             <div class="form-group">
               <label>Moment du déclenchement</label>
               <div class="segmented-control" id="ctrl-time-type" style="display: flex; flex-wrap: wrap; gap: 6px;">
-                <button type="button" class="segmented-btn ${(s.time_type === 'fixed' || !s.time_type) ? 'active' : ''}" data-type="fixed">🕒 Heure fixe</button>
-                <button type="button" class="segmented-btn ${s.time_type === 'sunrise' ? 'active' : ''}" data-type="sunrise">🌅 Lever soleil</button>
-                <button type="button" class="segmented-btn ${s.time_type === 'sunset' ? 'active' : ''}" data-type="sunset">🌇 Coucher soleil</button>
-                <button type="button" class="segmented-btn ${s.time_type === 'zone_enter' ? 'active' : ''}" data-type="zone_enter">📍 Arrivée zone</button>
-                <button type="button" class="segmented-btn ${s.time_type === 'zone_leave' ? 'active' : ''}" data-type="zone_leave">🚪 Sortie zone</button>
+                <button type="button" class="segmented-btn ${(s.time_type === 'fixed' || !s.time_type) ? 'active' : ''}" data-type="fixed"><ha-icon icon="mdi:clock-outline"></ha-icon> <span>Heure fixe</span></button>
+                <button type="button" class="segmented-btn ${s.time_type === 'sunrise' ? 'active' : ''}" data-type="sunrise"><ha-icon icon="mdi:weather-sunset-up"></ha-icon> <span>Lever soleil</span></button>
+                <button type="button" class="segmented-btn ${s.time_type === 'sunset' ? 'active' : ''}" data-type="sunset"><ha-icon icon="mdi:weather-sunset-down"></ha-icon> <span>Coucher soleil</span></button>
+                <button type="button" class="segmented-btn ${s.time_type === 'zone_enter' ? 'active' : ''}" data-type="zone_enter"><ha-icon icon="mdi:map-marker-radius"></ha-icon> <span>Arrivée zone</span></button>
+                <button type="button" class="segmented-btn ${s.time_type === 'zone_leave' ? 'active' : ''}" data-type="zone_leave"><ha-icon icon="mdi:map-marker-minus"></ha-icon> <span>Sortie zone</span></button>
               </div>
 
               <div id="section-fixed-time" style="${(s.time_type === 'fixed' || !s.time_type) ? '' : 'display:none;'}">
@@ -1883,8 +1925,8 @@
           `}
 
           <div style="display:flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
-            <button class="btn" id="modal-cancel">Annuler</button>
-            <button class="btn btn-primary" id="modal-save">Enregistrer</button>
+            <button class="btn" id="modal-cancel"><ha-icon icon="mdi:close"></ha-icon> <span>Annuler</span></button>
+            <button class="btn btn-primary" id="modal-save"><ha-icon icon="mdi:check"></ha-icon> <span>Enregistrer</span></button>
           </div>
         </div>
       `;
@@ -2198,11 +2240,14 @@
           }
         </style>
         <ha-card>
-          <div class="title">🗓️ ${this._config.title || "DomoLink-Planification"}</div>
+          <div class="title">
+            <ha-icon icon="mdi:calendar-clock" style="--mdc-icon-size:22px; color:#38bdf8;"></ha-icon>
+            <span>${this._config.title || "DomoLink-Planification"}</span>
+          </div>
           <p style="margin:0; font-size: 13px; color: #94a3b8;">
             Moteur d'automatisation & suivi solaire actif.
           </p>
-          <a href="/domolink-planification" class="link-btn">👉 Ouvrir le panneau de planification</a>
+          <a href="/domolink-planification" class="link-btn"><ha-icon icon="mdi:open-in-app" style="--mdc-icon-size:16px; vertical-align:middle; margin-right:4px;"></ha-icon> Ouvrir le panneau de planification</a>
         </ha-card>
       `;
     }
