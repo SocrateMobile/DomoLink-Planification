@@ -1,0 +1,61 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "DomoLink-Planification",
+        "description": "Configure general settings for DomoLink-Planification.",
+        "data": {
+          "enable_panel": "Show panel in sidebar",
+          "default_country": "Default country for public holidays",
+          "default_holiday_mode": "Public holidays management"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "DomoLink-Planification is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "DomoLink-Planification Options",
+        "description": "Modify display and schedule preferences.",
+        "data": {
+          "enable_panel": "Show panel in sidebar",
+          "default_country": "Default country for public holidays",
+          "default_holiday_mode": "Public holidays management"
+        }
+      }
+    }
+  },
+  "services": {
+    "trigger_schedule": {
+      "name": "Trigger a schedule",
+      "description": "Immediately triggers an action for a saved schedule.",
+      "fields": {
+        "schedule_id": {
+          "name": "Schedule ID",
+          "description": "ID of the schedule to trigger."
+        }
+      }
+    },
+    "refresh_solar_shading": {
+      "name": "Refresh solar shading",
+      "description": "Forces immediate solar calculation and adjusts roller shutter positions."
+    },
+    "set_schedule_enabled": {
+      "name": "Enable or disable a schedule",
+      "description": "Enables or suspends automatic execution of a schedule.",
+      "fields": {
+        "schedule_id": {
+          "name": "Schedule ID",
+          "description": "ID of the schedule to modify."
+        },
+        "enabled": {
+          "name": "Enabled",
+          "description": "Determines whether the schedule is active or paused."
+        }
+      }
+    }
+  }
+}
