@@ -1,10 +1,18 @@
 """Constantes pour l'intégration DomoLink-Planification."""
 
+import json
+import os
 from typing import Final
 
 DOMAIN: Final = "domolink_planification"
 NAME: Final = "DomoLink-Planification"
-VERSION: Final = "1.3.0"
+
+_MANIFEST_PATH = os.path.join(os.path.dirname(__file__), "manifest.json")
+try:
+    with open(_MANIFEST_PATH, "r", encoding="utf-8") as _f:
+        VERSION: Final = json.load(_f).get("version", "unknown")
+except Exception:
+    VERSION: Final = "unknown"
 
 # Panneau Lovelace & Frontend
 PANEL_URL_PATH: Final = "domolink-planification"
