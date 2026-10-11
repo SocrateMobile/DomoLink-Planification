@@ -244,6 +244,8 @@ class DomolinkPlanificationApiView(HomeAssistantView):
             act = body.get("action")
             if act == "trigger":
                 await self.coordinator.async_gate_trigger_action(mode="toggle")
+            elif act == "pedestrian":
+                await self.coordinator.async_gate_trigger_action(mode="pedestrian")
             elif act == "close_now":
                 await self.coordinator.async_gate_trigger_action(mode="close")
             elif act == "open_now":

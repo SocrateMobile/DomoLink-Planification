@@ -4,7 +4,7 @@ from typing import Any, Final
 
 DOMAIN: Final = "domolink_planification"
 NAME: Final = "DomoLink-Planification"
-VERSION: Final = "2.0.2"
+VERSION: Final = "2.0.3"
 
 # Panneau Lovelace & Frontend
 PANEL_URL_PATH: Final = "domolink-planification"
@@ -152,6 +152,7 @@ DEFAULT_GATE_CONFIG: Final[dict[str, Any]] = {
     "switch_type": GATE_SWITCH_TYPE_PULSE,
     "switch_entity": "switch.shelly_ouverture_portail_voiture",
     "close_switch_entity": "",
+    "pedestrian_switch_entity": "",
     "sensor_entity": "binary_sensor.etat_du_portail",
     "sensor_inverted": False,
     "notify_service": "notify.free_mobile_sms_enghien_enghien",
