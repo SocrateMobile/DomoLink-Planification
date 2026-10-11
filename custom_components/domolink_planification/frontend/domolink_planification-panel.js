@@ -770,17 +770,268 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      min-height: 180px;
-      background: radial-gradient(circle at center, rgba(30, 58, 138, 0.25) 0%, rgba(15, 23, 42, 0.6) 100%);
-      border-radius: 14px;
+      min-height: 220px;
+      background: radial-gradient(ellipse at center 70%, rgba(30, 58, 138, 0.28) 0%, rgba(15, 23, 42, 0.95) 100%);
+      border-radius: 16px;
       border: 1px solid rgba(255, 255, 255, 0.08);
       margin-bottom: 24px;
       position: relative;
       overflow: hidden;
+      perspective: 750px;
+      perspective-origin: 50% 60%;
+      box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.6);
+      user-select: none;
     }
-    .gate-svg {
-      width: 280px;
-      height: 160px;
+
+    .gate-driveway {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 85px;
+      background: linear-gradient(to bottom, #1e293b, #0f172a);
+      transform: rotateX(55deg);
+      transform-origin: bottom center;
+      border-top: 1px dashed rgba(255, 255, 255, 0.15);
+    }
+    .gate-driveway-line {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 2px;
+      background: repeating-linear-gradient(to bottom, rgba(56, 189, 248, 0.25) 0, rgba(56, 189, 248, 0.25) 8px, transparent 8px, transparent 16px);
+      transform: translateX(-50%);
+    }
+
+    .gate-pillar {
+      position: absolute;
+      bottom: 30px;
+      width: 26px;
+      height: 125px;
+      background: linear-gradient(135deg, #475569, #334155 50%, #1e293b);
+      border-radius: 4px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.6), inset 1px 1px 0 rgba(255,255,255,0.15);
+      z-index: 10;
+    }
+    .gate-pillar-cap {
+      position: absolute;
+      top: -8px;
+      left: -4px;
+      width: 34px;
+      height: 10px;
+      background: linear-gradient(to bottom, #64748b, #334155);
+      border-radius: 3px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    }
+    .gate-pillar-beacon {
+      position: absolute;
+      top: -18px;
+      left: 6px;
+      width: 14px;
+      height: 10px;
+      border-radius: 3px 3px 1px 1px;
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+    .gate-scene.state-closed .gate-pillar-beacon {
+      background: #10b981;
+      box-shadow: 0 0 12px #10b981;
+    }
+    .gate-scene.state-open .gate-pillar-beacon {
+      background: #3b82f6;
+      box-shadow: 0 0 12px #3b82f6;
+    }
+    .gate-scene.state-closing .gate-pillar-beacon {
+      background: #f59e0b;
+      box-shadow: 0 0 16px #f59e0b;
+      animation: gateBeaconFlash 0.8s infinite alternate;
+    }
+    .gate-scene.state-obstacle .gate-pillar-beacon {
+      background: #ef4444;
+      box-shadow: 0 0 18px #ef4444;
+      animation: gateBeaconFlash 0.4s infinite alternate;
+    }
+    .gate-scene.state-hold_open .gate-pillar-beacon {
+      background: #a855f7;
+      box-shadow: 0 0 12px #a855f7;
+    }
+    @keyframes gateBeaconFlash {
+      0% { opacity: 0.2; transform: scale(0.9); }
+      100% { opacity: 1; transform: scale(1.15); }
+    }
+
+    .gate-pillar.left { left: calc(50% - 198px); }
+    .gate-pillar.right { right: calc(50% - 198px); }
+
+    .gate-wall-wing {
+      position: absolute;
+      bottom: 30px;
+      height: 100px;
+      background: linear-gradient(to bottom, #334155, #1e293b);
+      border-top: 3px solid #475569;
+      opacity: 0.6;
+      z-index: 5;
+    }
+    .gate-wall-wing.left { left: 0; width: calc(50% - 198px); }
+    .gate-wall-wing.right { right: 0; width: calc(50% - 198px); }
+
+    .gate-stage {
+      position: absolute;
+      bottom: 38px;
+      left: calc(50% - 172px);
+      width: 344px;
+      height: 106px;
+      transform-style: preserve-3d;
+      z-index: 8;
+    }
+
+    .gate-leaf {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 50%;
+      transform-style: preserve-3d;
+      transition: transform 1.2s cubic-bezier(0.25, 1, 0.5, 1);
+    }
+    .gate-leaf.left {
+      left: 0;
+      transform-origin: left center;
+    }
+    .gate-leaf.right {
+      right: 0;
+      transform-origin: right center;
+    }
+
+    .gate-frame {
+      width: 100%;
+      height: 100%;
+      box-sizing: border-box;
+      background: linear-gradient(135deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.98));
+      border: 2px solid #38bdf8;
+      border-radius: 4px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-evenly;
+      padding: 6px;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.6), inset 0 0 12px rgba(56, 189, 248, 0.2);
+      position: relative;
+      backface-visibility: visible;
+      transition: border-color 0.4s ease, box-shadow 0.4s ease;
+    }
+    .gate-scene.state-closed .gate-frame {
+      border-color: #10b981;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.6), inset 0 0 12px rgba(16, 185, 129, 0.25);
+    }
+    .gate-scene.state-open .gate-frame {
+      border-color: #38bdf8;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.6), inset 0 0 12px rgba(56, 189, 248, 0.25);
+    }
+    .gate-scene.state-closing .gate-frame {
+      border-color: #f59e0b;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.6), inset 0 0 12px rgba(245, 158, 11, 0.25);
+    }
+    .gate-scene.state-obstacle .gate-frame {
+      border-color: #ef4444;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.6), inset 0 0 12px rgba(239, 68, 68, 0.3);
+    }
+    .gate-scene.state-hold_open .gate-frame {
+      border-color: #a855f7;
+      box-shadow: 0 8px 25px rgba(0,0,0,0.6), inset 0 0 12px rgba(168, 85, 247, 0.3);
+    }
+
+    .gate-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      height: 100%;
+      justify-content: space-between;
+    }
+    .gate-slat {
+      height: 6px;
+      background: linear-gradient(to bottom, #475569, #334155);
+      border-radius: 2px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.4);
+      border-top: 1px solid rgba(255,255,255,0.12);
+    }
+    .gate-diagonal {
+      position: absolute;
+      top: 6px;
+      bottom: 6px;
+      width: 2px;
+      background: rgba(255, 255, 255, 0.15);
+    }
+    .gate-leaf.left .gate-diagonal { left: 45%; }
+    .gate-leaf.right .gate-diagonal { right: 45%; }
+
+    .gate-handle {
+      position: absolute;
+      top: 50%;
+      width: 5px;
+      height: 18px;
+      background: #e2e8f0;
+      border-radius: 2px;
+      transform: translateY(-50%);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.6);
+    }
+    .gate-leaf.left .gate-handle { right: 5px; }
+    .gate-leaf.right .gate-handle { left: 5px; }
+
+    .gate-hinge {
+      position: absolute;
+      width: 5px;
+      height: 10px;
+      background: #94a3b8;
+      border-radius: 2px;
+      z-index: 12;
+    }
+    .gate-leaf.left .gate-hinge { left: -3px; }
+    .gate-leaf.right .gate-hinge { right: -3px; }
+    .gate-hinge.top { top: 14px; }
+    .gate-hinge.bottom { bottom: 14px; }
+
+    .gate-ground-stopper {
+      position: absolute;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 14px;
+      height: 9px;
+      background: #94a3b8;
+      border-radius: 2px 2px 0 0;
+      z-index: 9;
+    }
+
+    .gate-scene.state-closed .gate-leaf.left { transform: rotateY(0deg); }
+    .gate-scene.state-closed .gate-leaf.right { transform: rotateY(0deg); }
+    
+    .gate-scene.state-open .gate-leaf.left { transform: rotateY(-72deg); }
+    .gate-scene.state-open .gate-leaf.right { transform: rotateY(72deg); }
+
+    .gate-scene.state-closing .gate-leaf.left { transform: rotateY(-34deg); }
+    .gate-scene.state-closing .gate-leaf.right { transform: rotateY(34deg); }
+
+    .gate-scene.state-obstacle .gate-leaf.left { transform: rotateY(-50deg); }
+    .gate-scene.state-obstacle .gate-leaf.right { transform: rotateY(50deg); }
+
+    .gate-scene.state-hold_open .gate-leaf.left { transform: rotateY(-72deg); }
+    .gate-scene.state-hold_open .gate-leaf.right { transform: rotateY(72deg); }
+
+    @media (max-width: 520px) {
+      .gate-scene {
+        perspective: 550px;
+        min-height: 190px;
+      }
+      .gate-stage {
+        width: 270px;
+        height: 88px;
+        left: calc(50% - 135px);
+        bottom: 30px;
+      }
+      .gate-pillar.left { left: calc(50% - 158px); width: 22px; height: 105px; }
+      .gate-pillar.right { right: calc(50% - 158px); width: 22px; height: 105px; }
+      .gate-wall-wing.left { width: calc(50% - 158px); }
+      .gate-wall-wing.right { width: calc(50% - 158px); }
     }
     .gate-countdown-wrap {
       text-align: center;
@@ -1331,9 +1582,7 @@
       }
 
       const historyList = (this._data.gate_history || gate.history || []).slice(0, 10);
-
-      const leftGateAngle = (state === "closed") ? 0 : ((state === "closing") ? 35 : 70);
-      const rightGateAngle = (state === "closed") ? 0 : ((state === "closing") ? -35 : -70);
+      const sceneStateClass = (state === "closed") ? "state-closed" : ((state === "closing") ? "state-closing" : ((state === "obstacle") ? "state-obstacle" : ((state === "hold_open" || isHoldOpen) ? "state-hold_open" : "state-open")));
       const gateGlowColor = (state === "closed") ? "#10b981" : ((state === "obstacle") ? "#ef4444" : ((state === "hold_open" || isHoldOpen) ? "#a855f7" : "#3b82f6"));
 
       return `
@@ -1355,38 +1604,53 @@
               </div>
             </div>
 
-            <div class="gate-scene" id="gate-scene-box">
-              <svg class="gate-svg" viewBox="0 0 300 160">
-                <defs>
-                  <filter id="gate-glow" x="-20%" y="-20%" width="140%" height="140%">
-                    <feGaussianBlur stdDeviation="4" result="blur" />
-                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                  </filter>
-                </defs>
-                <line x1="20" y1="130" x2="280" y2="130" stroke="rgba(255,255,255,0.2)" stroke-width="2" />
-                <rect x="35" y="25" width="22" height="105" rx="3" fill="#334155" stroke="rgba(255,255,255,0.2)" />
-                <rect x="31" y="20" width="30" height="7" rx="2" fill="#475569" />
-                <circle cx="46" cy="15" r="4" fill="${gateGlowColor}" filter="url(#gate-glow)" />
-                <rect x="243" y="25" width="22" height="105" rx="3" fill="#334155" stroke="rgba(255,255,255,0.2)" />
-                <rect x="239" y="20" width="30" height="7" rx="2" fill="#475569" />
-                <circle cx="254" cy="15" r="4" fill="${gateGlowColor}" filter="url(#gate-glow)" />
-                <g style="transform-origin: 57px 125px; transform: rotate(${leftGateAngle}deg); transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);">
-                  <rect x="57" y="35" width="90" height="90" rx="4" fill="rgba(30, 41, 59, 0.85)" stroke="${gateGlowColor}" stroke-width="2" />
-                  <line x1="75" y1="35" x2="75" y2="125" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" />
-                  <line x1="95" y1="35" x2="95" y2="125" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" />
-                  <line x1="115" y1="35" x2="115" y2="125" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" />
-                  <line x1="135" y1="35" x2="135" y2="125" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" />
-                  <line x1="57" y1="80" x2="147" y2="80" stroke="rgba(255,255,255,0.4)" stroke-width="2" />
-                </g>
-                <g style="transform-origin: 243px 125px; transform: rotate(${rightGateAngle}deg); transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);">
-                  <rect x="153" y="35" width="90" height="90" rx="4" fill="rgba(30, 41, 59, 0.85)" stroke="${gateGlowColor}" stroke-width="2" />
-                  <line x1="165" y1="35" x2="165" y2="125" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" />
-                  <line x1="185" y1="35" x2="185" y2="125" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" />
-                  <line x1="205" y1="35" x2="205" y2="125" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" />
-                  <line x1="225" y1="35" x2="225" y2="125" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" />
-                  <line x1="153" y1="80" x2="243" y2="80" stroke="rgba(255,255,255,0.4)" stroke-width="2" />
-                </g>
-              </svg>
+            <div class="gate-scene ${sceneStateClass}" id="gate-scene-box" title="Cliquez 5 fois pour un clin d'œil spécial !">
+              <div class="gate-wall-wing left"></div>
+              <div class="gate-wall-wing right"></div>
+              <div class="gate-driveway"><div class="gate-driveway-line"></div></div>
+              <div class="gate-pillar left">
+                <div class="gate-pillar-cap"></div>
+                <div class="gate-pillar-beacon" id="beacon-left"></div>
+              </div>
+              <div class="gate-pillar right">
+                <div class="gate-pillar-cap"></div>
+                <div class="gate-pillar-beacon" id="beacon-right"></div>
+              </div>
+              <div class="gate-ground-stopper"></div>
+              <div class="gate-stage">
+                <div class="gate-leaf left">
+                  <div class="gate-hinge top"></div>
+                  <div class="gate-hinge bottom"></div>
+                  <div class="gate-frame">
+                    <div class="gate-bars">
+                      <div class="gate-slat"></div>
+                      <div class="gate-slat"></div>
+                      <div class="gate-slat"></div>
+                      <div class="gate-slat"></div>
+                      <div class="gate-slat"></div>
+                      <div class="gate-slat"></div>
+                    </div>
+                    <div class="gate-diagonal"></div>
+                    <div class="gate-handle"></div>
+                  </div>
+                </div>
+                <div class="gate-leaf right">
+                  <div class="gate-hinge top"></div>
+                  <div class="gate-hinge bottom"></div>
+                  <div class="gate-frame">
+                    <div class="gate-bars">
+                      <div class="gate-slat"></div>
+                      <div class="gate-slat"></div>
+                      <div class="gate-slat"></div>
+                      <div class="gate-slat"></div>
+                      <div class="gate-slat"></div>
+                      <div class="gate-slat"></div>
+                    </div>
+                    <div class="gate-diagonal"></div>
+                    <div class="gate-handle"></div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div class="gate-countdown-wrap">
@@ -1626,18 +1890,21 @@
       }
 
       // 7. Easter Egg
+      const triggerClick = () => {
+        this._gateEasterEggCount = (this._gateEasterEggCount || 0) + 1;
+        if (this._gateEasterEggCount >= 5) {
+          this._gateEasterEggCount = 0;
+          this._triggerGateEasterEgg();
+        } else {
+          this._showToast(`✨ Clin d'œil DomoLink : ${5 - this._gateEasterEggCount} clic(s) restant(s)...`);
+        }
+      };
+
       const badgeEasterEgg = this.shadowRoot.querySelector("#gate-badge-easter-egg");
-      if (badgeEasterEgg) {
-        badgeEasterEgg.addEventListener("click", () => {
-          this._gateEasterEggCount = (this._gateEasterEggCount || 0) + 1;
-          if (this._gateEasterEggCount >= 5) {
-            this._gateEasterEggCount = 0;
-            this._triggerGateEasterEgg();
-          } else {
-            this._showToast(`✨ Clin d'œil DomoLink : ${5 - this._gateEasterEggCount} clic(s) restant(s)...`);
-          }
-        });
-      }
+      if (badgeEasterEgg) badgeEasterEgg.addEventListener("click", triggerClick);
+
+      const sceneEasterEgg = this.shadowRoot.querySelector("#gate-scene-box");
+      if (sceneEasterEgg) sceneEasterEgg.addEventListener("click", triggerClick);
     }
 
     async _gateAction(action, durationMinutes = null) {
