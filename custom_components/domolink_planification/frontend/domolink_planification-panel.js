@@ -1,5 +1,5 @@
 /**
- * DomoLink-Planification — Panneau Tactile & Carte Lovelace (v2.0.2)
+ * DomoLink-Planification — Panneau Tactile & Carte Lovelace (v2.0.3)
  * Glassmorphism sombre, suivi solaire bioclimatique des volets, gestion multi-pays des jours fériés.
  */
 
@@ -1856,6 +1856,22 @@
               </div>
 
               <div class="form-group">
+                <label>Entité ou Étiquette Commande Piéton (Optionnel)</label>
+                <div class="ac-wrapper" id="ac-gate-pedestrian-wrapper">
+                  <div class="ac-input-group">
+                    <input type="text" class="form-control" id="gate-cfg-pedestrian-entity" value="${cfg.pedestrian_switch_entity || ''}" placeholder="Rechercher switch piéton ou étiquette...">
+                    <div class="ac-controls">
+                      <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
+                      <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
+                    </div>
+                  </div>
+                  <div class="ac-dropdown" id="ac-gate-pedestrian-dropdown"></div>
+                  <div class="ac-selection-hint" id="ac-gate-pedestrian-hint"></div>
+                </div>
+                <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Relais / contact sec dédié à l'ouverture piéton ou partielle (ex: 1 seul battant)</div>
+              </div>
+
+              <div class="form-group">
                 <label>Durée de l'Impulsion (secondes)</label>
                 <input type="number" step="0.5" min="0.5" max="10" class="form-control" id="gate-cfg-pulse-duration" value="${cfg.pulse_duration || 1.0}">
               </div>
@@ -2104,7 +2120,7 @@
 
             <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
               <div style="font-size: 13px; color: #94a3b8;">
-                DomoLink-Planification version <span style="font-weight: 700; color: #38bdf8;">v2.0.2</span> • Conçu par SocrateMobile & JFL
+                DomoLink-Planification version <span style="font-weight: 700; color: #38bdf8;">v2.0.3</span> • Conçu par SocrateMobile & JFL
               </div>
               <div style="display: flex; gap: 12px;">
                 <a href="https://github.com/SocrateMobile/DomoLink-Planification" target="_blank" style="color: #38bdf8; text-decoration: none; font-size: 13px; display: flex; align-items: center; gap: 4px;">
@@ -2337,6 +2353,13 @@
                 <ha-icon icon="mdi:gate"></ha-icon>
                 <span>Actionner le Portail</span>
               </button>
+
+              ${cfg.pedestrian_switch_entity ? `
+                <button class="gate-btn" style="background: rgba(168, 85, 247, 0.2); border-color: rgba(168, 85, 247, 0.5); color: #c084fc;" id="btn-gate-pedestrian" title="Ouvrir l'accès piéton">
+                  <ha-icon icon="mdi:walk"></ha-icon>
+                  <span>Accès Piéton</span>
+                </button>
+              ` : ''}
               
               ${isHoldOpen ? `
                 <button class="gate-btn gate-btn-hold" style="background: rgba(16, 185, 129, 0.2); border-color: rgba(16, 185, 129, 0.5); color: #34d399;" id="btn-gate-cancel-hold">
@@ -2414,6 +2437,10 @@
       // 1. Bouton Actionner
       const btnTrigger = this.shadowRoot.querySelector("#btn-gate-trigger");
       if (btnTrigger) btnTrigger.addEventListener("click", () => this._gateAction("trigger"));
+
+      // 1b. Bouton Accès Piéton
+      const btnPedestrian = this.shadowRoot.querySelector("#btn-gate-pedestrian");
+      if (btnPedestrian) btnPedestrian.addEventListener("click", () => this._gateAction("pedestrian"));
 
       // 2. Bouton Fermer Maintenant
       const btnClose = this.shadowRoot.querySelector("#btn-gate-close");
@@ -2588,6 +2615,14 @@
       });
 
       this._setupEntityAutocomplete(this.shadowRoot, {
+        inputId: "gate-cfg-pedestrian-entity",
+        dropdownId: "ac-gate-pedestrian-dropdown",
+        hintId: "ac-gate-pedestrian-hint",
+        entities: switchList,
+        fallbackEntities: allEntitiesList,
+      });
+
+      this._setupEntityAutocomplete(this.shadowRoot, {
         inputId: "gate-cfg-sensor-entity",
         dropdownId: "ac-gate-sensor-dropdown",
         hintId: "ac-gate-sensor-hint",
@@ -2692,6 +2727,7 @@
         switch_type: sr.querySelector("#gate-cfg-switch-type")?.value || "pulse",
         switch_entity: sr.querySelector("#gate-cfg-switch-entity")?.value?.trim() || "",
         close_switch_entity: sr.querySelector("#gate-cfg-close-switch-entity")?.value?.trim() || "",
+        pedestrian_switch_entity: sr.querySelector("#gate-cfg-pedestrian-entity")?.value?.trim() || "",
         pulse_duration: parseFloat(sr.querySelector("#gate-cfg-pulse-duration")?.value || "1.0"),
         sensor_entity: sr.querySelector("#gate-cfg-sensor-entity")?.value?.trim() || "",
         sensor_inverted: sr.querySelector("#gate-cfg-sensor-inverted")?.checked || false,

@@ -971,7 +971,44 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         switch_type = cfg.get("switch_type", GATE_SWITCH_TYPE_PULSE)
         switch_entity = cfg.get("switch_entity")
         close_switch_entity = cfg.get("close_switch_entity")
+        pedestrian_switch_entity = cfg.get("pedestrian_switch_entity")
         pulse_duration = float(cfg.get("pulse_duration", 1.0))
+
+        # Commande dédiée à l'accès piéton
+        if mode == "pedestrian":
+            if not pedestrian_switch_entity:
+                _LOGGER.warning("DomoLink-Portail: Aucun switch configuré pour l'accès piéton")
+                return False
+            try:
+                targets = self._resolve_switch_entities(pedestrian_switch_entity)
+                for ent in targets:
+                    domain = ent.split(".")[0]
+                    await self.hass.services.async_call(domain, "turn_on", {"entity_id": ent}, blocking=True)
+                if pulse_duration > 0:
+                    await asyncio.sleep(pulse_duration)
+                    for ent in targets:
+                        domain = ent.split(".")[0]
+                        st = self.hass.states.get(ent)
+                        if st and st.state == "on":
+                            await self.hass.services.async_call(domain, "turn_off", {"entity_id": ent}, blocking=True)
+
+                now = dt_util.now()
+                self._gate_state["state"] = "opening"
+                self._gate_state["movement_start"] = now.isoformat()
+                self._gate_state["last_action"] = "Ouverture piéton en cours..."
+                self._gate_state["last_action_time"] = now.isoformat()
+                self.data["gate"] = self.get_gate_status()
+                self.async_set_updated_data(self.data)
+                await self.storage.async_add_gate_history({
+                    "timestamp": now.isoformat(),
+                    "event": "OUVERTURE_PIETON",
+                    "status": "PEDESTRIAN",
+                    "details": "Commande d'accès piéton déclenchée",
+                })
+                return True
+            except Exception as err:
+                _LOGGER.error("DomoLink-Portail: Erreur commande accès piéton: %s", err)
+                return False
 
         if not switch_entity:
             _LOGGER.warning("DomoLink-Portail: Aucun switch configuré pour commander le portail")

@@ -25,11 +25,12 @@ async def async_setup_entry(
     coordinator: DomolinkPlanificationCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     added_ids: set[str] = set()
 
-    # Bouton global de réévaluation des volets
+    # Bouton global de réévaluation des volets et boutons portail
     async_add_entities([
         PlanificationSolarRefreshButton(coordinator, entry),
         GateTriggerButton(coordinator, entry),
         GateCloseButton(coordinator, entry),
+        GatePedestrianButton(coordinator, entry),
     ])
 
     @callback
@@ -163,4 +164,31 @@ class GateCloseButton(CoordinatorEntity[DomolinkPlanificationCoordinator], Butto
             "manufacturer": "DomoLink",
             "model": "Contrôleur d'Accès Universel",
         }
+
+
+class GatePedestrianButton(CoordinatorEntity[DomolinkPlanificationCoordinator], ButtonEntity):
+    """Bouton pour actionner l'accès piéton du portail."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Portail Accès Piéton"
+    _attr_icon = "mdi:walk"
+
+    def __init__(self, coordinator: DomolinkPlanificationCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self.entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_gate_pedestrian_button"
+
+    async def async_press(self) -> None:
+        """Déclenche la commande d'accès piéton."""
+        await self.coordinator.async_gate_trigger_action(mode="pedestrian")
+
+    @property
+    def device_info(self) -> dict[str, Any]:
+        return {
+            "identifiers": {(DOMAIN, "gate")},
+            "name": "DomoLink Portail",
+            "manufacturer": "DomoLink",
+            "model": "Contrôleur d'Accès Universel",
+        }
+
 
