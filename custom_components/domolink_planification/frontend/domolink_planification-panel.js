@@ -1102,6 +1102,52 @@
       font-size: 13px;
     }
     .gate-history-item:last-child { border-bottom: none; }
+
+    /* Grille et Cartes de Paramètres Centralisés */
+    .settings-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      gap: 24px;
+      align-items: start;
+    }
+    .settings-card {
+      background: rgba(30, 41, 59, 0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+    }
+    .settings-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .settings-card-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0;
+    }
+    .settings-card-desc {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
+    @media (max-width: 600px) {
+      .settings-grid {
+        grid-template-columns: 1fr;
+      }
+    }
   `;
 
   class DomolinkPlanificationPanel extends HTMLElement {
@@ -1412,23 +1458,14 @@
         });
       });
 
-      // 4. Enregistrement des paramètres
-      const btnSaveSettings = this.shadowRoot.querySelector("#btn-save-settings");
-      if (btnSaveSettings) {
-        btnSaveSettings.addEventListener("click", async () => {
-          const country = this.shadowRoot.querySelector("#settings-country").value;
-          await this._hass.fetchWithAuth("/api/domolink_planification/save_settings", {
-            method: "POST",
-            body: JSON.stringify({ country }),
-          });
-          this._showToast("⚙️ Paramètres enregistrés !");
-          await this._fetchData();
-        });
-      }
-
-      // 5. Gestion des événements du Portail & Accès
+      // 4. Gestion des événements du Portail & Accès
       if (this._activeTab === "gate") {
         this._attachGateEvents();
+      }
+
+      // 5. Gestion des événements des Paramètres Centralisés
+      if (this._activeTab === "settings") {
+        this._attachSettingsEvents();
       }
     }
 
@@ -1526,21 +1563,314 @@
       }
 
       if (this._activeTab === "settings") {
-        const currentCountry = (this._data.settings || {}).country || "FR";
-        return `
-          <div style="max-width: 600px; background: rgba(30, 41, 59, 0.6); border-radius: 14px; border: 1px solid rgba(255,255,255,0.08); padding: 24px;">
-            <h3 style="margin-top:0;">Paramètres de DomoLink-Planification</h3>
+        return this._renderSettingsTabContent();
+      }
+      return "";
+    }
+
+    _renderSettingsTabContent() {
+      const settings = this._data.settings || {};
+      const gate = this._data.gate || {};
+      const cfg = gate.config || {};
+      const currentCountry = settings.country || "FR";
+      const currentHolidayMode = settings.holiday_mode || "always";
+
+      const states = (this._hass && this._hass.states) ? this._hass.states : {};
+      const switchesAndCovers = Object.keys(states).filter(id => id.startsWith("switch.") || id.startsWith("cover."));
+      const binarySensors = Object.keys(states).filter(id => id.startsWith("binary_sensor."));
+      const weatherSensors = Object.keys(states).filter(id => id.startsWith("weather.") || id.startsWith("sensor."));
+      const personEntities = Object.keys(states).filter(id => id.startsWith("person.") || id.startsWith("zone.") || id.startsWith("group."));
+      const alarmEntities = Object.keys(states).filter(id => id.startsWith("alarm_control_panel."));
+
+      return `
+        <div style="margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px;">
+          <div>
+            <h2 style="margin: 0; font-size: 22px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 10px;">
+              <ha-icon icon="mdi:cog" style="color: #3b82f6;"></ha-icon>
+              <span>Paramètres de DomoLink-Planification</span>
+            </h2>
+            <div style="font-size: 14px; color: #94a3b8; margin-top: 4px;">
+              Centralisation complète : motorisation du portail, gestion bioclimatique des volets, calendriers et système.
+            </div>
+          </div>
+          <button class="btn btn-primary" id="btn-save-all-settings" style="box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4); padding: 12px 22px;">
+            <ha-icon icon="mdi:content-save-all"></ha-icon>
+            <span>Enregistrer Tous les Paramètres</span>
+          </button>
+        </div>
+
+        <datalist id="dl-switches-covers">
+          ${switchesAndCovers.map(id => `<option value="${id}">${states[id]?.attributes?.friendly_name || ''}</option>`).join("")}
+        </datalist>
+        <datalist id="dl-binary-sensors">
+          ${binarySensors.map(id => `<option value="${id}">${states[id]?.attributes?.friendly_name || ''}</option>`).join("")}
+        </datalist>
+        <datalist id="dl-weather-sensors">
+          ${weatherSensors.map(id => `<option value="${id}">${states[id]?.attributes?.friendly_name || ''}</option>`).join("")}
+        </datalist>
+        <datalist id="dl-persons">
+          ${personEntities.map(id => `<option value="${id}">${states[id]?.attributes?.friendly_name || ''}</option>`).join("")}
+        </datalist>
+        <datalist id="dl-alarms">
+          ${alarmEntities.map(id => `<option value="${id}">${states[id]?.attributes?.friendly_name || ''}</option>`).join("")}
+        </datalist>
+
+        <div class="settings-grid">
+          <!-- 1. CARTE PORTAIL & CONTRÔLE D'ACCÈS -->
+          <div class="settings-card" style="grid-column: 1 / -1;">
+            <div class="settings-card-header">
+              <div>
+                <h3 class="settings-card-title">
+                  <ha-icon icon="mdi:gate" style="color: #38bdf8;"></ha-icon>
+                  <span>🚪 Contrôle d'Accès & Motorisation du Portail</span>
+                </h3>
+                <div class="settings-card-desc">
+                  Type de relais (contact sec, dual, cover), capteur magnétique, temporisations jour/nuit et anti-obstacle.
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 13px; font-weight: 600; color: #cbd5e1;">Surveillance & fermeture automatique</span>
+                <label class="switch">
+                  <input type="checkbox" id="gate-cfg-enabled" ${cfg.enabled !== false ? 'checked' : ''}>
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+              <div class="form-group">
+                <label>Type de Commande Portail</label>
+                <select class="form-control" id="gate-cfg-switch-type">
+                  <option value="pulse" ${(cfg.switch_type || 'pulse') === 'pulse' ? 'selected' : ''}>Contact sec / Impulsion unique (Shelly, relais...)</option>
+                  <option value="dual" ${cfg.switch_type === 'dual' ? 'selected' : ''}>Commandes séparées (Switch Ouvrir + Switch Fermer)</option>
+                  <option value="cover" ${cfg.switch_type === 'cover' ? 'selected' : ''}>Entité Cover native (cover.*)</option>
+                  <option value="toggle" ${cfg.switch_type === 'toggle' ? 'selected' : ''}>Interrupteur bistable ON/OFF</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Entité de Commande Principale (Switch ou Cover)</label>
+                <input type="text" list="dl-switches-covers" class="form-control" id="gate-cfg-switch-entity" value="${cfg.switch_entity || 'switch.shelly_ouverture_portail_voiture'}" placeholder="switch.votre_shelly_portail">
+              </div>
+
+              <div class="form-group" id="gate-cfg-dual-group" style="${cfg.switch_type === 'dual' ? '' : 'display:none;'}">
+                <label>Entité Dédiée à la Fermeture</label>
+                <input type="text" list="dl-switches-covers" class="form-control" id="gate-cfg-close-switch-entity" value="${cfg.close_switch_entity || ''}" placeholder="switch.votre_relais_fermeture">
+              </div>
+
+              <div class="form-group">
+                <label>Durée de l'Impulsion (secondes)</label>
+                <input type="number" step="0.5" min="0.5" max="10" class="form-control" id="gate-cfg-pulse-duration" value="${cfg.pulse_duration || 1.0}">
+              </div>
+
+              <div class="form-group">
+                <label>Capteur d'État (Ouvert / Fermé)</label>
+                <input type="text" list="dl-binary-sensors" class="form-control" id="gate-cfg-sensor-entity" value="${cfg.sensor_entity || 'binary_sensor.etat_du_portail'}" placeholder="binary_sensor.etat_du_portail">
+              </div>
+
+              <div class="form-group" style="display: flex; flex-direction: column; justify-content: center;">
+                <label>Inversion Polarité du Capteur</label>
+                <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
+                  <label class="switch">
+                    <input type="checkbox" id="gate-cfg-sensor-inverted" ${cfg.sensor_inverted ? 'checked' : ''}>
+                    <span class="slider"></span>
+                  </label>
+                  <span style="font-size: 13px; color: #94a3b8;">Activer si 'on' = Fermé (contact inversé)</span>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Service / Canal de Notification</label>
+                <input type="text" class="form-control" id="gate-cfg-notify-service" value="${cfg.notify_service || 'notify.free_mobile_sms_enghien_enghien'}" placeholder="notify.free_mobile_sms_xxx">
+                <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Ex: notify.free_mobile_sms_xxx ou notify.notify (laisser vide pour désactiver)</div>
+              </div>
+
+              <div class="form-group" style="display: flex; flex-direction: column; justify-content: center;">
+                <label>Notification Confirmation Fermeture</label>
+                <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
+                  <label class="switch">
+                    <input type="checkbox" id="gate-cfg-notify-on-close" ${cfg.notify_on_close_success !== false ? 'checked' : ''}>
+                    <span class="slider"></span>
+                  </label>
+                  <span style="font-size: 13px; color: #94a3b8;">Alerter dès que le portail est bien refermé</span>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Délai Journée avant Fermeture (minutes)</label>
+                <input type="number" min="1" max="120" class="form-control" id="gate-cfg-timer-day" value="${cfg.timer_day_minutes || 10}">
+              </div>
+
+              <div class="form-group">
+                <label>Délai Nuit avant Fermeture (minutes)</label>
+                <input type="number" min="1" max="60" class="form-control" id="gate-cfg-timer-night" value="${cfg.timer_night_minutes || 3}">
+              </div>
+
+              <div class="form-group">
+                <label>Heure Début Journée</label>
+                <input type="time" class="form-control" id="gate-cfg-day-start" value="${cfg.day_start || '07:00'}">
+              </div>
+
+              <div class="form-group">
+                <label>Heure Début Nuit</label>
+                <input type="time" class="form-control" id="gate-cfg-night-start" value="${cfg.night_start || '22:00'}">
+              </div>
+
+              <div class="form-group">
+                <label>Temps de Course / Vérification (sec)</label>
+                <input type="number" min="10" max="300" class="form-control" id="gate-cfg-check-delay" value="${cfg.check_delay || 60}">
+              </div>
+
+              <div class="form-group">
+                <label>Tentatives Max en cas d'Obstacle</label>
+                <input type="number" min="1" max="15" class="form-control" id="gate-cfg-max-retries" value="${cfg.max_retries || 6}">
+              </div>
+
+              <div class="form-group">
+                <label>Intervalle entre Réessais (minutes)</label>
+                <input type="number" min="1" max="60" class="form-control" id="gate-cfg-retry-interval" value="${cfg.retry_interval_minutes || 10}">
+              </div>
+            </div>
+
+            <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
+              <button class="btn btn-primary" id="btn-save-gate-config">
+                <ha-icon icon="mdi:content-save-outline"></ha-icon>
+                <span>Enregistrer les Paramètres du Portail</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 2. CARTE GESTION BIOCLIMATIQUE & VOLETS SOLAIRES -->
+          <div class="settings-card">
+            <div class="settings-card-header">
+              <div>
+                <h3 class="settings-card-title">
+                  <ha-icon icon="mdi:weather-sunny" style="color: #f59e0b;"></ha-icon>
+                  <span>☀️ Gestion Bioclimatique & Volets Solaires</span>
+                </h3>
+                <div class="settings-card-desc">
+                  Seuils thermiques globaux et protection anti-battement.
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Température de Confort Cible par Défaut (°C)</label>
+              <input type="number" step="0.5" min="16" max="32" class="form-control" id="settings-solar-temp" value="${settings.solar_target_temp || 24}">
+              <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Seuil de déclenchement d'ombrage solaire d'été</div>
+            </div>
+
+            <div class="form-group">
+              <label>Hystérésis Anti-Battement (minutes)</label>
+              <input type="number" min="5" max="60" class="form-control" id="settings-solar-hysteresis" value="${settings.solar_hysteresis || 15}">
+              <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Temporisation avant réouverture après un passage nuageux</div>
+            </div>
+
+            <div class="form-group">
+              <label>Capteur Météo / Ensoleillement Global</label>
+              <input type="text" list="dl-weather-sensors" class="form-control" id="settings-solar-weather" value="${settings.solar_weather_entity || ''}" placeholder="weather.forecast_home ou laisser vide">
+            </div>
+
+            <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
+              <button class="btn btn-primary" id="btn-save-solar-settings">
+                <ha-icon icon="mdi:content-save-outline"></ha-icon>
+                <span>Enregistrer les Paramètres Solaires</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 3. CARTE CALENDRIERS, JOURS FÉRIÉS & PRÉSENCE -->
+          <div class="settings-card">
+            <div class="settings-card-header">
+              <div>
+                <h3 class="settings-card-title">
+                  <ha-icon icon="mdi:calendar-month-outline" style="color: #a855f7;"></ha-icon>
+                  <span>📅 Calendrier, Jours Fériés & Présence</span>
+                </h3>
+                <div class="settings-card-desc">
+                  Moteur autonome multi-pays et conditions contextuelles.
+                </div>
+              </div>
+            </div>
+
             <div class="form-group">
               <label>Pays pour le calcul des Jours Fériés</label>
               <select class="form-control" id="settings-country">
                 ${COUNTRIES.map(c => `<option value="${c.code}" ${c.code === currentCountry ? 'selected' : ''}>${c.name}</option>`).join("")}
               </select>
             </div>
-            <button class="btn btn-primary" id="btn-save-settings"><ha-icon icon="mdi:content-save-outline"></ha-icon> <span>Enregistrer les paramètres</span></button>
+
+            <div class="form-group">
+              <label>Comportement par Défaut les Jours Fériés</label>
+              <select class="form-control" id="settings-holiday-mode">
+                <option value="always" ${currentHolidayMode === 'always' ? 'selected' : ''}>Toujours exécuter les planifications</option>
+                <option value="exclude" ${currentHolidayMode === 'exclude' ? 'selected' : ''}>Ignorer / Suspendre les jours fériés</option>
+                <option value="weekend" ${currentHolidayMode === 'weekend' ? 'selected' : ''}>Appliquer le comportement 'Week-end'</option>
+                <option value="only_holidays" ${currentHolidayMode === 'only_holidays' ? 'selected' : ''}>Uniquement les jours fériés</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Entité de Présence Globale</label>
+              <input type="text" list="dl-persons" class="form-control" id="settings-presence-entity" value="${settings.presence_entity || ''}" placeholder="zone.home ou person.jean_frederic">
+            </div>
+
+            <div class="form-group">
+              <label>Entité Centrale d'Alarme</label>
+              <input type="text" list="dl-alarms" class="form-control" id="settings-alarm-entity" value="${settings.alarm_entity || ''}" placeholder="alarm_control_panel.votre_alarme">
+            </div>
+
+            <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
+              <button class="btn btn-primary" id="btn-save-general-settings">
+                <ha-icon icon="mdi:content-save-outline"></ha-icon>
+                <span>Enregistrer les Paramètres Généraux</span>
+              </button>
+            </div>
           </div>
-        `;
-      }
-      return "";
+
+          <!-- 4. CARTE SYSTÈME & LOVELACE -->
+          <div class="settings-card" style="grid-column: 1 / -1;">
+            <div class="settings-card-header">
+              <div>
+                <h3 class="settings-card-title">
+                  <ha-icon icon="mdi:view-dashboard-outline" style="color: #10b981;"></ha-icon>
+                  <span>🎛️ Intégration Lovelace & Informations Système</span>
+                </h3>
+                <div class="settings-card-desc">
+                  Code de carte dashboard et maintenance de l'intégration.
+                </div>
+              </div>
+            </div>
+
+            <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between;">
+              <div>
+                <div style="font-weight: 600; font-size: 14px; color: #f8fafc;">Carte Lovelace Personnalisée</div>
+                <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">
+                  Générez et copiez le code YAML de la carte DomoLink pour vos dashboards.
+                </div>
+              </div>
+              <button class="btn btn-clipboard" id="btn-copy-card-settings">
+                <ha-icon icon="mdi:content-copy"></ha-icon>
+                <span>Copier le Code Carte Lovelace</span>
+              </button>
+            </div>
+
+            <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+              <div style="font-size: 13px; color: #94a3b8;">
+                DomoLink-Planification version <span style="font-weight: 700; color: #38bdf8;">v1.4.2</span> • Conçu par SocrateMobile & JFL
+              </div>
+              <div style="display: flex; gap: 12px;">
+                <a href="https://github.com/SocrateMobile/DomoLink-Planification" target="_blank" style="color: #38bdf8; text-decoration: none; font-size: 13px; display: flex; align-items: center; gap: 4px;">
+                  <ha-icon icon="mdi:github" style="--mdc-icon-size:16px;"></ha-icon> <span>Dépôt GitHub</span>
+                </a>
+                <a href="https://buymeacoffee.com/Socrate" target="_blank" style="color: #facc15; text-decoration: none; font-size: 13px; display: flex; align-items: center; gap: 4px;">
+                  <ha-icon icon="mdi:coffee" style="--mdc-icon-size:16px;"></ha-icon> <span>Soutenir le projet</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
     }
 
     _formatGateCountdown(seconds) {
@@ -1598,9 +1928,15 @@
                   Mode : ${gate.is_day ? "☀️ Période Jour (" + (cfg.timer_day_minutes || 10) + " min)" : "🌙 Période Nuit (" + (cfg.timer_night_minutes || 3) + " min)"}
                 </div>
               </div>
-              <div class="gate-badge ${badgeClass}" id="gate-badge-easter-egg" title="Cliquez 5 fois pour un clin d'œil spécial !">
-                <ha-icon icon="${badgeIcon}"></ha-icon>
-                <span>${badgeLabel}</span>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <button class="gate-btn gate-btn-hold" id="btn-goto-gate-settings" title="Accéder à tous les réglages du portail" style="padding: 6px 14px; font-size: 13px;">
+                  <ha-icon icon="mdi:cog-outline"></ha-icon>
+                  <span>Paramètres</span>
+                </button>
+                <div class="gate-badge ${badgeClass}" id="gate-badge-easter-egg" title="Cliquez 5 fois pour un clin d'œil spécial !">
+                  <ha-icon icon="${badgeIcon}"></ha-icon>
+                  <span>${badgeLabel}</span>
+                </div>
               </div>
             </div>
 
@@ -1742,103 +2078,6 @@
                 `;
               }).join("")}
             </div>
-          </div>
-        </div>
-
-        <div class="gate-card" style="margin-top: 24px;">
-          <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
-            <ha-icon icon="mdi:tune-vertical"></ha-icon>
-            <span>Paramétrage Universel du Matériel & Délais</span>
-          </h3>
-          <p style="font-size: 13px; color: #94a3b8; margin-top: -8px; margin-bottom: 20px;">
-            Configurez vos entités Home Assistant, le type de contact, le moyen de notification et les plages horaires selon votre installation.
-          </p>
-
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
-            <div class="form-group">
-              <label>Type de Commande Portail</label>
-              <select class="form-control" id="gate-cfg-switch-type">
-                <option value="pulse" ${(cfg.switch_type || 'pulse') === 'pulse' ? 'selected' : ''}>Contact sec / Impulsion unique (Shelly, relais...)</option>
-                <option value="dual" ${cfg.switch_type === 'dual' ? 'selected' : ''}>Commandes séparées (Switch Ouvrir + Switch Fermer)</option>
-                <option value="cover" ${cfg.switch_type === 'cover' ? 'selected' : ''}>Entité Cover native (cover.*)</option>
-                <option value="toggle" ${cfg.switch_type === 'toggle' ? 'selected' : ''}>Interrupteur bistable ON/OFF</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label>Entité de Commande (Switch ou Cover)</label>
-              <input type="text" class="form-control" id="gate-cfg-switch-entity" value="${cfg.switch_entity || 'switch.shelly_ouverture_portail_voiture'}" placeholder="switch.votre_shelly_portail">
-            </div>
-
-            <div class="form-group" id="gate-cfg-dual-group" style="${cfg.switch_type === 'dual' ? '' : 'display:none;'}">
-              <label>Entité Dédiée à la Fermeture</label>
-              <input type="text" class="form-control" id="gate-cfg-close-switch-entity" value="${cfg.close_switch_entity || ''}" placeholder="switch.votre_relais_fermeture">
-            </div>
-
-            <div class="form-group">
-              <label>Durée de l'Impulsion (secondes)</label>
-              <input type="number" step="0.5" min="0.5" max="10" class="form-control" id="gate-cfg-pulse-duration" value="${cfg.pulse_duration || 1.0}">
-            </div>
-
-            <div class="form-group">
-              <label>Capteur d'État (Ouvert / Fermé)</label>
-              <input type="text" class="form-control" id="gate-cfg-sensor-entity" value="${cfg.sensor_entity || 'binary_sensor.etat_du_portail'}" placeholder="binary_sensor.etat_du_portail">
-            </div>
-
-            <div class="form-group" style="display: flex; flex-direction: column; justify-content: center;">
-              <label>Inversion Polarité du Capteur</label>
-              <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
-                <label class="switch">
-                  <input type="checkbox" id="gate-cfg-sensor-inverted" ${cfg.sensor_inverted ? 'checked' : ''}>
-                  <span class="slider"></span>
-                </label>
-                <span style="font-size: 13px; color: #94a3b8;">Activer si 'on' = Fermé (inversé)</span>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>Service / Canal de Notification</label>
-              <input type="text" class="form-control" id="gate-cfg-notify-service" value="${cfg.notify_service || 'notify.free_mobile_sms_enghien_enghien'}" placeholder="notify.free_mobile_sms... ou laisser vide">
-              <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Ex: notify.free_mobile_sms_xxx ou notify.notify (laisser vide pour désactiver)</div>
-            </div>
-
-            <div class="form-group">
-              <label>Délai Journée avant Fermeture (minutes)</label>
-              <input type="number" min="1" max="120" class="form-control" id="gate-cfg-timer-day" value="${cfg.timer_day_minutes || 10}">
-            </div>
-
-            <div class="form-group">
-              <label>Délai Nuit avant Fermeture (minutes)</label>
-              <input type="number" min="1" max="60" class="form-control" id="gate-cfg-timer-night" value="${cfg.timer_night_minutes || 3}">
-            </div>
-
-            <div class="form-group">
-              <label>Heure Début Journée</label>
-              <input type="time" class="form-control" id="gate-cfg-day-start" value="${cfg.day_start || '07:00'}">
-            </div>
-
-            <div class="form-group">
-              <label>Heure Début Nuit</label>
-              <input type="time" class="form-control" id="gate-cfg-night-start" value="${cfg.night_start || '22:00'}">
-            </div>
-
-            <div class="form-group">
-              <label>Tentatives Max en cas d'Obstacle</label>
-              <input type="number" min="1" max="15" class="form-control" id="gate-cfg-max-retries" value="${cfg.max_retries || 6}">
-            </div>
-
-            <div class="form-group">
-              <label>Temps d'attente de course / vérification (secondes)</label>
-              <input type="number" min="10" max="300" class="form-control" id="gate-cfg-check-delay" value="${cfg.check_delay || 60}">
-            </div>
-          </div>
-
-          <div style="margin-top: 24px;">
-            <button class="btn btn-primary" id="btn-save-gate-config" style="padding: 12px 24px; font-size: 15px;">
-              <ha-icon icon="mdi:content-save-outline"></ha-icon>
-              <span>Enregistrer la Configuration du Portail</span>
-            </button>
-          </div>
         </div>
       `;
     }
@@ -1874,22 +2113,16 @@
         toggleEnabled.addEventListener("change", () => this._gateAction("toggle_enabled"));
       }
 
-      // 5. Bascule dynamique dual switch dans les paramètres
-      const switchTypeSelect = this.shadowRoot.querySelector("#gate-cfg-switch-type");
-      const dualGroup = this.shadowRoot.querySelector("#gate-cfg-dual-group");
-      if (switchTypeSelect && dualGroup) {
-        switchTypeSelect.addEventListener("change", (e) => {
-          dualGroup.style.display = e.target.value === "dual" ? "block" : "none";
+      // 5. Raccourci vers l'onglet Paramètres
+      const btnGotoSettings = this.shadowRoot.querySelector("#btn-goto-gate-settings");
+      if (btnGotoSettings) {
+        btnGotoSettings.addEventListener("click", () => {
+          this._activeTab = "settings";
+          this._render();
         });
       }
 
-      // 6. Enregistrement de la configuration
-      const btnSaveGate = this.shadowRoot.querySelector("#btn-save-gate-config");
-      if (btnSaveGate) {
-        btnSaveGate.addEventListener("click", () => this._saveGateConfig());
-      }
-
-      // 7. Easter Egg
+      // 6. Easter Egg
       const triggerClick = () => {
         this._gateEasterEggCount = (this._gateEasterEggCount || 0) + 1;
         if (this._gateEasterEggCount >= 5) {
@@ -1905,6 +2138,33 @@
 
       const sceneEasterEgg = this.shadowRoot.querySelector("#gate-scene-box");
       if (sceneEasterEgg) sceneEasterEgg.addEventListener("click", triggerClick);
+    }
+
+    _attachSettingsEvents() {
+      // 1. Bascule dynamique dual switch dans les paramètres portail
+      const switchTypeSelect = this.shadowRoot.querySelector("#gate-cfg-switch-type");
+      const dualGroup = this.shadowRoot.querySelector("#gate-cfg-dual-group");
+      if (switchTypeSelect && dualGroup) {
+        switchTypeSelect.addEventListener("change", (e) => {
+          dualGroup.style.display = e.target.value === "dual" ? "block" : "none";
+        });
+      }
+
+      // 2. Boutons d'enregistrement
+      const btnSaveAll = this.shadowRoot.querySelector("#btn-save-all-settings");
+      if (btnSaveAll) btnSaveAll.addEventListener("click", () => this._saveAllSettings());
+
+      const btnSaveGate = this.shadowRoot.querySelector("#btn-save-gate-config");
+      if (btnSaveGate) btnSaveGate.addEventListener("click", () => this._saveGateConfig());
+
+      const btnSaveGeneral = this.shadowRoot.querySelector("#btn-save-general-settings");
+      if (btnSaveGeneral) btnSaveGeneral.addEventListener("click", () => this._saveGeneralSettings());
+
+      const btnSaveSolar = this.shadowRoot.querySelector("#btn-save-solar-settings");
+      if (btnSaveSolar) btnSaveSolar.addEventListener("click", () => this._saveSolarSettings());
+
+      const btnCopyCard = this.shadowRoot.querySelector("#btn-copy-card-settings");
+      if (btnCopyCard) btnCopyCard.addEventListener("click", () => this._copyLovelaceCardCode());
     }
 
     async _gateAction(action, durationMinutes = null) {
@@ -1932,6 +2192,7 @@
       if (!this._hass) return;
       const sr = this.shadowRoot;
       const config = {
+        enabled: sr.querySelector("#gate-cfg-enabled") ? sr.querySelector("#gate-cfg-enabled").checked : true,
         switch_type: sr.querySelector("#gate-cfg-switch-type")?.value || "pulse",
         switch_entity: sr.querySelector("#gate-cfg-switch-entity")?.value?.trim() || "",
         close_switch_entity: sr.querySelector("#gate-cfg-close-switch-entity")?.value?.trim() || "",
@@ -1939,12 +2200,14 @@
         sensor_entity: sr.querySelector("#gate-cfg-sensor-entity")?.value?.trim() || "",
         sensor_inverted: sr.querySelector("#gate-cfg-sensor-inverted")?.checked || false,
         notify_service: sr.querySelector("#gate-cfg-notify-service")?.value?.trim() || "",
+        notify_on_close_success: sr.querySelector("#gate-cfg-notify-on-close") ? sr.querySelector("#gate-cfg-notify-on-close").checked : true,
         timer_day_minutes: parseInt(sr.querySelector("#gate-cfg-timer-day")?.value || "10", 10),
         timer_night_minutes: parseInt(sr.querySelector("#gate-cfg-timer-night")?.value || "3", 10),
         day_start: sr.querySelector("#gate-cfg-day-start")?.value || "07:00",
         night_start: sr.querySelector("#gate-cfg-night-start")?.value || "22:00",
         max_retries: parseInt(sr.querySelector("#gate-cfg-max-retries")?.value || "6", 10),
         check_delay: parseInt(sr.querySelector("#gate-cfg-check-delay")?.value || "60", 10),
+        retry_interval_minutes: parseInt(sr.querySelector("#gate-cfg-retry-interval")?.value || "10", 10),
       };
 
       try {
@@ -1953,13 +2216,65 @@
           body: JSON.stringify(config),
         });
         if (res.ok) {
-          this._showToast("✅ Configuration du portail enregistrée !");
+          const data = await res.json();
+          if (data.gate) this._data.gate = data.gate;
+          this._showToast("✅ Paramètres du portail enregistrés avec succès !");
           await this._fetchData();
+        } else {
+          this._showToast("❌ Erreur lors de l'enregistrement du portail.");
         }
       } catch (err) {
         console.error("Erreur sauvegarde config portail:", err);
-        this._showToast("❌ Erreur lors de l'enregistrement.");
+        this._showToast("❌ Erreur de communication.");
       }
+    }
+
+    async _saveGeneralSettings() {
+      if (!this._hass) return;
+      const sr = this.shadowRoot;
+      const body = {
+        country: sr.querySelector("#settings-country")?.value || "FR",
+        holiday_mode: sr.querySelector("#settings-holiday-mode")?.value || "always",
+        presence_entity: sr.querySelector("#settings-presence-entity")?.value?.trim() || null,
+        alarm_entity: sr.querySelector("#settings-alarm-entity")?.value?.trim() || null,
+      };
+      try {
+        await this._hass.fetchWithAuth("/api/domolink_planification/save_settings", {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+        this._showToast("✅ Paramètres généraux enregistrés !");
+        await this._fetchData();
+      } catch (err) {
+        this._showToast("❌ Erreur sauvegarde paramètres généraux.");
+      }
+    }
+
+    async _saveSolarSettings() {
+      if (!this._hass) return;
+      const sr = this.shadowRoot;
+      const body = {
+        solar_target_temp: parseFloat(sr.querySelector("#settings-solar-temp")?.value || "24"),
+        solar_hysteresis: parseInt(sr.querySelector("#settings-solar-hysteresis")?.value || "15", 10),
+        solar_weather_entity: sr.querySelector("#settings-solar-weather")?.value?.trim() || "",
+      };
+      try {
+        await this._hass.fetchWithAuth("/api/domolink_planification/save_settings", {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+        this._showToast("✅ Paramètres solaires enregistrés !");
+        await this._fetchData();
+      } catch (err) {
+        this._showToast("❌ Erreur sauvegarde paramètres solaires.");
+      }
+    }
+
+    async _saveAllSettings() {
+      await this._saveGateConfig();
+      await this._saveGeneralSettings();
+      await this._saveSolarSettings();
+      this._showToast("🌟 Tous les paramètres ont été enregistrés avec succès !");
     }
 
     _triggerGateEasterEgg() {
