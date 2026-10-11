@@ -4,7 +4,7 @@ from typing import Any, Final
 
 DOMAIN: Final = "domolink_planification"
 NAME: Final = "DomoLink-Planification"
-VERSION: Final = "2.0.1"
+VERSION: Final = "2.0.2"
 
 # Panneau Lovelace & Frontend
 PANEL_URL_PATH: Final = "domolink-planification"

@@ -1,5 +1,5 @@
 /**
- * DomoLink-Planification — Panneau Tactile & Carte Lovelace (v1.3.0)
+ * DomoLink-Planification — Panneau Tactile & Carte Lovelace (v2.0.2)
  * Glassmorphism sombre, suivi solaire bioclimatique des volets, gestion multi-pays des jours fériés.
  */
 
@@ -1325,6 +1325,20 @@
       this._hass = hass;
       if (!oldHass) {
         this._fetchData();
+        if (hass && hass.callWS && !this._cachedLabels) {
+          hass.callWS({ type: "config/label_registry/list" })
+            .then(res => {
+              if (Array.isArray(res)) {
+                this._cachedLabels = res.map(l => ({
+                  id: l.label_id,
+                  name: l.name,
+                  icon: l.icon || "mdi:tag-outline",
+                  color: l.color || "#38bdf8"
+                }));
+              }
+            })
+            .catch(() => {});
+        }
       }
     }
 
@@ -1762,22 +1776,6 @@
           </button>
         </div>
 
-        <datalist id="dl-switches-covers">
-          ${switchesAndCovers.map(id => `<option value="${id}">${states[id]?.attributes?.friendly_name || ''}</option>`).join("")}
-        </datalist>
-        <datalist id="dl-binary-sensors">
-          ${binarySensors.map(id => `<option value="${id}">${states[id]?.attributes?.friendly_name || ''}</option>`).join("")}
-        </datalist>
-        <datalist id="dl-weather-sensors">
-          ${weatherSensors.map(id => `<option value="${id}">${states[id]?.attributes?.friendly_name || ''}</option>`).join("")}
-        </datalist>
-        <datalist id="dl-persons">
-          ${personEntities.map(id => `<option value="${id}">${states[id]?.attributes?.friendly_name || ''}</option>`).join("")}
-        </datalist>
-        <datalist id="dl-alarms">
-          ${alarmEntities.map(id => `<option value="${id}">${states[id]?.attributes?.friendly_name || ''}</option>`).join("")}
-        </datalist>
-
         <div class="settings-grid">
           <!-- 1. CARTE PORTAIL & CONTRÔLE D'ACCÈS -->
           <div class="settings-card" style="grid-column: 1 / -1;">
@@ -1828,13 +1826,33 @@
               </div>
 
               <div class="form-group">
-                <label>Entité de Commande Principale (Switch ou Cover)</label>
-                <input type="text" list="dl-switches-covers" class="form-control" id="gate-cfg-switch-entity" value="${cfg.switch_entity || 'switch.shelly_ouverture_portail_voiture'}" placeholder="switch.votre_shelly_portail">
+                <label>Entité ou Étiquette de Commande Principale (Switch, Cover, Tag)</label>
+                <div class="ac-wrapper" id="ac-gate-switch-wrapper">
+                  <div class="ac-input-group">
+                    <input type="text" class="form-control" id="gate-cfg-switch-entity" value="${cfg.switch_entity || 'switch.shelly_ouverture_portail_voiture'}" placeholder="Rechercher switch, cover ou étiquette...">
+                    <div class="ac-controls">
+                      <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
+                      <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
+                    </div>
+                  </div>
+                  <div class="ac-dropdown" id="ac-gate-switch-dropdown"></div>
+                  <div class="ac-selection-hint" id="ac-gate-switch-hint"></div>
+                </div>
               </div>
 
               <div class="form-group" id="gate-cfg-dual-group" style="${cfg.switch_type === 'dual' ? '' : 'display:none;'}">
                 <label>Entité Dédiée à la Fermeture</label>
-                <input type="text" list="dl-switches-covers" class="form-control" id="gate-cfg-close-switch-entity" value="${cfg.close_switch_entity || ''}" placeholder="switch.votre_relais_fermeture">
+                <div class="ac-wrapper" id="ac-gate-close-switch-wrapper">
+                  <div class="ac-input-group">
+                    <input type="text" class="form-control" id="gate-cfg-close-switch-entity" value="${cfg.close_switch_entity || ''}" placeholder="Rechercher relais fermeture...">
+                    <div class="ac-controls">
+                      <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
+                      <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
+                    </div>
+                  </div>
+                  <div class="ac-dropdown" id="ac-gate-close-switch-dropdown"></div>
+                  <div class="ac-selection-hint" id="ac-gate-close-switch-hint"></div>
+                </div>
               </div>
 
               <div class="form-group">
@@ -1843,8 +1861,18 @@
               </div>
 
               <div class="form-group">
-                <label>Capteur d'État (Ouvert / Fermé)</label>
-                <input type="text" list="dl-binary-sensors" class="form-control" id="gate-cfg-sensor-entity" value="${cfg.sensor_entity || 'binary_sensor.etat_du_portail'}" placeholder="binary_sensor.etat_du_portail">
+                <label>Capteur d'État ou Étiquette (Ouvert / Fermé)</label>
+                <div class="ac-wrapper" id="ac-gate-sensor-wrapper">
+                  <div class="ac-input-group">
+                    <input type="text" class="form-control" id="gate-cfg-sensor-entity" value="${cfg.sensor_entity || 'binary_sensor.etat_du_portail'}" placeholder="Rechercher capteur ou étiquette...">
+                    <div class="ac-controls">
+                      <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
+                      <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
+                    </div>
+                  </div>
+                  <div class="ac-dropdown" id="ac-gate-sensor-dropdown"></div>
+                  <div class="ac-selection-hint" id="ac-gate-sensor-hint"></div>
+                </div>
               </div>
 
               <div class="form-group" style="display: flex; flex-direction: column; justify-content: center;">
@@ -1860,7 +1888,17 @@
 
               <div class="form-group">
                 <label>Service / Canal de Notification</label>
-                <input type="text" class="form-control" id="gate-cfg-notify-service" value="${cfg.notify_service || 'notify.free_mobile_sms_enghien_enghien'}" placeholder="notify.free_mobile_sms_xxx">
+                <div class="ac-wrapper" id="ac-gate-notify-wrapper">
+                  <div class="ac-input-group">
+                    <input type="text" class="form-control" id="gate-cfg-notify-service" value="${cfg.notify_service || 'notify.free_mobile_sms_enghien_enghien'}" placeholder="Rechercher service notify...">
+                    <div class="ac-controls">
+                      <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
+                      <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
+                    </div>
+                  </div>
+                  <div class="ac-dropdown" id="ac-gate-notify-dropdown"></div>
+                  <div class="ac-selection-hint" id="ac-gate-notify-hint"></div>
+                </div>
                 <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Ex: notify.free_mobile_sms_xxx ou notify.notify (laisser vide pour désactiver)</div>
               </div>
 
@@ -1947,7 +1985,17 @@
 
             <div class="form-group">
               <label>Capteur Météo / Ensoleillement Global</label>
-              <input type="text" list="dl-weather-sensors" class="form-control" id="settings-solar-weather" value="${settings.solar_weather_entity || ''}" placeholder="weather.forecast_home ou laisser vide">
+              <div class="ac-wrapper" id="ac-settings-weather-wrapper">
+                <div class="ac-input-group">
+                  <input type="text" class="form-control" id="settings-solar-weather" value="${settings.solar_weather_entity || ''}" placeholder="weather.forecast_home ou capteur ensoleillement">
+                  <div class="ac-controls">
+                    <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
+                    <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
+                  </div>
+                </div>
+                <div class="ac-dropdown" id="ac-settings-weather-dropdown"></div>
+                <div class="ac-selection-hint" id="ac-settings-weather-hint"></div>
+              </div>
             </div>
 
             <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
@@ -1991,12 +2039,32 @@
 
             <div class="form-group">
               <label>Entité de Présence Globale</label>
-              <input type="text" list="dl-persons" class="form-control" id="settings-presence-entity" value="${settings.presence_entity || ''}" placeholder="zone.home ou person.jean_frederic">
+              <div class="ac-wrapper" id="ac-settings-presence-wrapper">
+                <div class="ac-input-group">
+                  <input type="text" class="form-control" id="settings-presence-entity" value="${settings.presence_entity || ''}" placeholder="zone.home ou person.jean_frederic">
+                  <div class="ac-controls">
+                    <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
+                    <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
+                  </div>
+                </div>
+                <div class="ac-dropdown" id="ac-settings-presence-dropdown"></div>
+                <div class="ac-selection-hint" id="ac-settings-presence-hint"></div>
+              </div>
             </div>
 
             <div class="form-group">
               <label>Entité Centrale d'Alarme</label>
-              <input type="text" list="dl-alarms" class="form-control" id="settings-alarm-entity" value="${settings.alarm_entity || ''}" placeholder="alarm_control_panel.votre_alarme">
+              <div class="ac-wrapper" id="ac-settings-alarm-wrapper">
+                <div class="ac-input-group">
+                  <input type="text" class="form-control" id="settings-alarm-entity" value="${settings.alarm_entity || ''}" placeholder="alarm_control_panel.votre_alarme">
+                  <div class="ac-controls">
+                    <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
+                    <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
+                  </div>
+                </div>
+                <div class="ac-dropdown" id="ac-settings-alarm-dropdown"></div>
+                <div class="ac-selection-hint" id="ac-settings-alarm-hint"></div>
+              </div>
             </div>
 
             <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
@@ -2036,7 +2104,7 @@
 
             <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
               <div style="font-size: 13px; color: #94a3b8;">
-                DomoLink-Planification version <span style="font-weight: 700; color: #38bdf8;">v2.0.1</span> • Conçu par SocrateMobile & JFL
+                DomoLink-Planification version <span style="font-weight: 700; color: #38bdf8;">v2.0.2</span> • Conçu par SocrateMobile & JFL
               </div>
               <div style="display: flex; gap: 12px;">
                 <a href="https://github.com/SocrateMobile/DomoLink-Planification" target="_blank" style="color: #38bdf8; text-decoration: none; font-size: 13px; display: flex; align-items: center; gap: 4px;">
@@ -2498,7 +2566,85 @@
         });
       }
 
-      // 2. Boutons d'enregistrement
+      // 2. Initialisation des autocomplétions avec support des étiquettes / tags
+      const switchList = this._buildEntityAndLabelList(["switch", "cover", "input_boolean", "light", "button"], true);
+      const sensorList = this._buildEntityAndLabelList(["binary_sensor", "sensor", "input_boolean", "cover"], true);
+      const allEntitiesList = this._buildEntityAndLabelList(null, false);
+
+      this._setupEntityAutocomplete(this.shadowRoot, {
+        inputId: "gate-cfg-switch-entity",
+        dropdownId: "ac-gate-switch-dropdown",
+        hintId: "ac-gate-switch-hint",
+        entities: switchList,
+        fallbackEntities: allEntitiesList,
+      });
+
+      this._setupEntityAutocomplete(this.shadowRoot, {
+        inputId: "gate-cfg-close-switch-entity",
+        dropdownId: "ac-gate-close-switch-dropdown",
+        hintId: "ac-gate-close-switch-hint",
+        entities: switchList,
+        fallbackEntities: allEntitiesList,
+      });
+
+      this._setupEntityAutocomplete(this.shadowRoot, {
+        inputId: "gate-cfg-sensor-entity",
+        dropdownId: "ac-gate-sensor-dropdown",
+        hintId: "ac-gate-sensor-hint",
+        entities: sensorList,
+        fallbackEntities: allEntitiesList,
+      });
+
+      // Notification services
+      const notifyList = [];
+      if (this._hass && this._hass.services && this._hass.services.notify) {
+        for (const s of Object.keys(this._hass.services.notify)) {
+          notifyList.push({
+            id: `notify.${s}`,
+            name: `Service Notify: ${s}`,
+            state: "Service",
+          });
+        }
+      }
+      this._setupEntityAutocomplete(this.shadowRoot, {
+        inputId: "gate-cfg-notify-service",
+        dropdownId: "ac-gate-notify-dropdown",
+        hintId: "ac-gate-notify-hint",
+        entities: notifyList,
+        fallbackEntities: allEntitiesList,
+      });
+
+      // Capteur solaire météo
+      const weatherList = this._buildEntityAndLabelList(["weather", "sensor"], false);
+      this._setupEntityAutocomplete(this.shadowRoot, {
+        inputId: "settings-solar-weather",
+        dropdownId: "ac-settings-weather-dropdown",
+        hintId: "ac-settings-weather-hint",
+        entities: weatherList,
+        fallbackEntities: allEntitiesList,
+      });
+
+      // Entité de présence
+      const presenceList = this._buildEntityAndLabelList(["person", "device_tracker", "zone", "input_boolean", "binary_sensor"], false);
+      this._setupEntityAutocomplete(this.shadowRoot, {
+        inputId: "settings-presence-entity",
+        dropdownId: "ac-settings-presence-dropdown",
+        hintId: "ac-settings-presence-hint",
+        entities: presenceList,
+        fallbackEntities: allEntitiesList,
+      });
+
+      // Entité d'alarme
+      const alarmList = this._buildEntityAndLabelList(["alarm_control_panel"], false);
+      this._setupEntityAutocomplete(this.shadowRoot, {
+        inputId: "settings-alarm-entity",
+        dropdownId: "ac-settings-alarm-dropdown",
+        hintId: "ac-settings-alarm-hint",
+        entities: alarmList,
+        fallbackEntities: allEntitiesList,
+      });
+
+      // 3. Boutons d'enregistrement
       const btnSaveAll = this.shadowRoot.querySelector("#btn-save-all-settings");
       if (btnSaveAll) btnSaveAll.addEventListener("click", () => this._saveAllSettings());
 
@@ -2790,6 +2936,58 @@
       `;
     }
 
+    _getLabelsList() {
+      if (this._data && Array.isArray(this._data.labels) && this._data.labels.length > 0) {
+        return this._data.labels;
+      }
+      return this._cachedLabels || [];
+    }
+
+    _buildEntityAndLabelList(filterDomains = null, includeLabels = true) {
+      const states = (this._hass && this._hass.states) ? this._hass.states : {};
+      const items = [];
+
+      // 1. Étiquettes / Tags de Home Assistant
+      if (includeLabels) {
+        const labels = this._getLabelsList();
+        for (const lbl of labels) {
+          items.push({
+            id: `label:${lbl.id}`,
+            name: `${lbl.name} (Étiquette)`,
+            rawName: lbl.name,
+            isLabel: true,
+            icon: lbl.icon || "mdi:tag-outline",
+            color: lbl.color || "#38bdf8",
+            state: "🏷️ Étiquette",
+          });
+        }
+      }
+
+      // 2. Entités de Home Assistant filtrées par domaine
+      for (const [entityId, stateObj] of Object.entries(states)) {
+        const domain = entityId.split(".")[0];
+        if (filterDomains && !filterDomains.includes(domain)) {
+          continue;
+        }
+        const fn = stateObj.attributes?.friendly_name || entityId;
+        const u = stateObj.attributes?.unit_of_measurement || "";
+        items.push({
+          id: entityId,
+          name: fn,
+          state: stateObj.state,
+          unit: u,
+        });
+      }
+
+      items.sort((a, b) => {
+        if (a.isLabel && !b.isLabel) return -1;
+        if (!a.isLabel && b.isLabel) return 1;
+        return a.name.localeCompare(b.name, "fr", { sensitivity: "base" });
+      });
+
+      return items;
+    }
+
     _setupEntityAutocomplete(container, {
       inputId,
       dropdownId,
@@ -2839,6 +3037,15 @@
           hint.innerHTML = "";
           return;
         }
+        if (entityId.startsWith("label:")) {
+          const lblId = entityId.substring(6);
+          const labels = this._getLabelsList();
+          const lbl = labels.find(l => l.id === lblId);
+          const lblName = lbl ? lbl.name : lblId;
+          hint.style.display = "block";
+          hint.innerHTML = `🏷️ Étiquette / Tag : <strong>${escapeHtml(lblName)}</strong> (s'applique à toutes les entités associées)`;
+          return;
+        }
         const stateObj = this._hass && this._hass.states ? this._hass.states[entityId] : null;
         if (stateObj) {
           const fn = stateObj.attributes?.friendly_name || entityId;
@@ -2852,12 +3059,19 @@
         }
       };
 
+      // Initialiser le hint dès le chargement si déjà rempli
+      if (input.value) {
+        updateHint(input.value);
+      }
+
       const filterList = (query) => {
         const q = normalize(query.trim());
         if (!q) return entities;
 
         let filtered = entities.filter(e => {
-          return normalize(e.name).includes(q) || normalize(e.id).includes(q);
+          return normalize(e.name).includes(q) ||
+                 normalize(e.id).includes(q) ||
+                 (e.rawName && normalize(e.rawName).includes(q));
         });
 
         if (filtered.length === 0 && fallbackEntities && fallbackEntities.length > 0) {
@@ -2873,7 +3087,7 @@
         activeIndex = -1;
 
         if (items.length === 0) {
-          dropdown.innerHTML = `<div class="ac-empty-msg">Aucune entité trouvée pour "<strong>${escapeHtml(query)}</strong>"</div>`;
+          dropdown.innerHTML = `<div class="ac-empty-msg">Aucune entité ou étiquette trouvée pour "<strong>${escapeHtml(query)}</strong>"</div>`;
           dropdown.classList.add("open");
           return;
         }
@@ -2882,20 +3096,26 @@
         const visibleItems = items.slice(0, maxDisplay);
 
         let html = visibleItems.map((item, idx) => {
-          const stateLabel = item.unit ? `${item.state} ${item.unit}` : (item.state || "");
+          const isLabel = item.isLabel || (item.id && item.id.startsWith("label:"));
+          const badgeClass = isLabel ? "ac-item-badge ac-badge-label" : "ac-item-badge";
+          const iconHtml = item.icon ? `<ha-icon icon="${item.icon}" style="font-size:16px; margin-right:6px; color:${item.color || '#38bdf8'};"></ha-icon>` : "";
+          const stateLabel = item.unit ? `${item.state} ${item.unit}` : (item.state || (isLabel ? "🏷️ Tag" : ""));
           return `
             <div class="ac-item" data-id="${escapeHtml(item.id)}" data-index="${idx}">
               <div class="ac-item-content">
-                <div class="ac-item-name">${highlightMatches(item.name, query)}</div>
+                <div class="ac-item-name" style="display:flex; align-items:center;">
+                  ${iconHtml}
+                  <span>${highlightMatches(item.name, query)}</span>
+                </div>
                 <div class="ac-item-id">${highlightMatches(item.id, query)}</div>
               </div>
-              ${stateLabel ? `<div class="ac-item-badge">${escapeHtml(stateLabel)}</div>` : ""}
+              ${stateLabel ? `<div class="${badgeClass}">${escapeHtml(stateLabel)}</div>` : ""}
             </div>
           `;
         }).join("");
 
         if (items.length > maxDisplay) {
-          html += `<div class="ac-empty-msg" style="font-size:11px; padding:8px;">+ ${items.length - maxDisplay} autres entités (tapez pour filtrer)</div>`;
+          html += `<div class="ac-empty-msg" style="font-size:11px; padding:8px;">+ ${items.length - maxDisplay} autres éléments (tapez pour filtrer)</div>`;
         }
 
         dropdown.innerHTML = html;

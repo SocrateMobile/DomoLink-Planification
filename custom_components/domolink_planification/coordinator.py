@@ -125,17 +125,26 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not entity_id:
                 return
 
-            # Surveillance du capteur du portail
+            # Surveillance du capteur du portail (entité directe ou étiquette/tag)
             gate_cfg = self.storage.get_gate_config()
             sensor_id = gate_cfg.get("sensor_entity")
-            if sensor_id and entity_id == sensor_id:
-                old_state = event.data.get("old_state")
-                new_state = event.data.get("new_state")
-                if old_state and new_state and old_state.state != new_state.state:
-                    self.hass.async_create_task(
-                        self._async_handle_gate_sensor_change(old_state.state, new_state.state)
-                    )
-                return
+            if sensor_id:
+                is_target_sensor = False
+                if entity_id == sensor_id:
+                    is_target_sensor = True
+                elif sensor_id.startswith("label:"):
+                    resolved = self.resolver.resolve_entities(TARGET_TYPE_LABEL, sensor_id[6:])
+                    if entity_id in resolved:
+                        is_target_sensor = True
+
+                if is_target_sensor:
+                    old_state = event.data.get("old_state")
+                    new_state = event.data.get("new_state")
+                    if old_state and new_state and old_state.state != new_state.state:
+                        self.hass.async_create_task(
+                            self._async_handle_gate_sensor_change(old_state.state, new_state.state)
+                        )
+                    return
 
             # Surveillance des personnes et trackers
             if entity_id.startswith("person.") or entity_id.startswith("device_tracker."):
@@ -187,6 +196,20 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Méthode appelée par DataUpdateCoordinator."""
+        labels_list = []
+        try:
+            from homeassistant.helpers import label_registry as lr
+            label_reg = lr.async_get(self.hass)
+            for lbl in label_reg.labels.values():
+                labels_list.append({
+                    "id": lbl.label_id,
+                    "name": lbl.name,
+                    "icon": lbl.icon or "mdi:tag-outline",
+                    "color": lbl.color or "blue",
+                })
+        except Exception as err:
+            _LOGGER.debug("Erreur lecture label_registry: %s", err)
+
         return {
             "schedules": self.storage.get_schedules(),
             "history": self.storage.get_history(),
@@ -194,6 +217,7 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "next_runs": self.compute_all_next_runs(),
             "solar_states": self._solar_shading_states,
             "gate": self.get_gate_status(),
+            "labels": labels_list,
         }
 
     # -------------------------------------------------------------------------
@@ -577,14 +601,43 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # GESTION DU PORTAIL & ACCÈS (Domolink-Portail)
     # =========================================================================
 
+    def _get_gate_sensor_resolved_state(self, sensor_id: str | None, cfg: dict[str, Any]) -> tuple[str | None, bool]:
+        """Résout l'état du capteur physique (entité unique ou étiquette)."""
+        if not sensor_id:
+            return None, False
+        if sensor_id.startswith("label:"):
+            entities = self.resolver.resolve_entities(TARGET_TYPE_LABEL, sensor_id[6:])
+            if not entities:
+                return None, False
+            last_state = None
+            for eid in entities:
+                st = self.hass.states.get(eid)
+                if st:
+                    last_state = st.state
+                    if self._is_gate_open_value(st.state, cfg):
+                        return st.state, True
+            return last_state, False
+        else:
+            st = self.hass.states.get(sensor_id)
+            if st:
+                return st.state, self._is_gate_open_value(st.state, cfg)
+            return None, False
+
+    def _resolve_switch_entities(self, target: str | None) -> list[str]:
+        """Résout une cible de commande (entité unique ou étiquette)."""
+        if not target:
+            return []
+        if target.startswith("label:"):
+            return self.resolver.resolve_entities(TARGET_TYPE_LABEL, target[6:])
+        return [target]
+
     def _init_gate_state_from_sensor(self) -> None:
         """Détecte l'état initial du portail depuis Home Assistant."""
         cfg = self.storage.get_gate_config()
         sensor_id = cfg.get("sensor_entity")
         if sensor_id:
-            st = self.hass.states.get(sensor_id)
-            if st:
-                is_open = self._is_gate_open_value(st.state, cfg)
+            raw_state, is_open = self._get_gate_sensor_resolved_state(sensor_id, cfg)
+            if raw_state is not None:
                 self._gate_state["state"] = "open" if is_open else "closed"
                 if is_open:
                     now = dt_util.now()
@@ -641,9 +694,7 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         sensor_id = cfg.get("sensor_entity")
                         is_open = False
                         if sensor_id:
-                            st = self.hass.states.get(sensor_id)
-                            if st:
-                                is_open = self._is_gate_open_value(st.state, cfg)
+                            _, is_open = self._get_gate_sensor_resolved_state(sensor_id, cfg)
                         if not is_open:
                             self._gate_state["state"] = "closed"
                             current_state = "closed"
@@ -668,9 +719,7 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         sensor_id = cfg.get("sensor_entity")
         sensor_state = None
         if sensor_id:
-            st = self.hass.states.get(sensor_id)
-            if st:
-                sensor_state = st.state
+            sensor_state, _ = self._get_gate_sensor_resolved_state(sensor_id, cfg)
 
         # Déterminer la période en cours (Jour ou Nuit)
         current_time_str = now.strftime("%H:%M")
@@ -855,9 +904,7 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         sensor_id = cfg.get("sensor_entity")
         is_still_open = True
         if sensor_id:
-            st = self.hass.states.get(sensor_id)
-            if st:
-                is_still_open = self._is_gate_open_value(st.state, cfg)
+            _, is_still_open = self._get_gate_sensor_resolved_state(sensor_id, cfg)
 
         now_after = dt_util.now()
 
@@ -932,41 +979,48 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         try:
             if switch_type == GATE_SWITCH_TYPE_PULSE:
-                # Contact sec / impulsion
-                domain = switch_entity.split(".")[0]
-                await self.hass.services.async_call(domain, "turn_on", {"entity_id": switch_entity}, blocking=True)
+                targets = self._resolve_switch_entities(switch_entity)
+                for ent in targets:
+                    domain = ent.split(".")[0]
+                    await self.hass.services.async_call(domain, "turn_on", {"entity_id": ent}, blocking=True)
                 if pulse_duration > 0:
                     await asyncio.sleep(pulse_duration)
-                    # Sécurité auto-off si le relais ne le gère pas en interne
-                    st = self.hass.states.get(switch_entity)
-                    if st and st.state == "on":
-                        await self.hass.services.async_call(domain, "turn_off", {"entity_id": switch_entity}, blocking=True)
+                    for ent in targets:
+                        domain = ent.split(".")[0]
+                        st = self.hass.states.get(ent)
+                        if st and st.state == "on":
+                            await self.hass.services.async_call(domain, "turn_off", {"entity_id": ent}, blocking=True)
 
             elif switch_type == GATE_SWITCH_TYPE_DUAL:
-                # Deux commandes séparées
-                target_entity = close_switch_entity if mode == "close" and close_switch_entity else switch_entity
-                domain = target_entity.split(".")[0]
-                await self.hass.services.async_call(domain, "turn_on", {"entity_id": target_entity}, blocking=True)
+                target_setting = close_switch_entity if mode == "close" and close_switch_entity else switch_entity
+                targets = self._resolve_switch_entities(target_setting)
+                for ent in targets:
+                    domain = ent.split(".")[0]
+                    await self.hass.services.async_call(domain, "turn_on", {"entity_id": ent}, blocking=True)
                 if pulse_duration > 0:
                     await asyncio.sleep(pulse_duration)
-                    st = self.hass.states.get(target_entity)
-                    if st and st.state == "on":
-                        await self.hass.services.async_call(domain, "turn_off", {"entity_id": target_entity}, blocking=True)
+                    for ent in targets:
+                        domain = ent.split(".")[0]
+                        st = self.hass.states.get(ent)
+                        if st and st.state == "on":
+                            await self.hass.services.async_call(domain, "turn_off", {"entity_id": ent}, blocking=True)
 
             elif switch_type == GATE_SWITCH_TYPE_COVER:
-                # Entité Cover native
-                if mode == "close":
-                    await self.hass.services.async_call("cover", "close_cover", {"entity_id": switch_entity}, blocking=True)
-                elif mode == "open":
-                    await self.hass.services.async_call("cover", "open_cover", {"entity_id": switch_entity}, blocking=True)
-                else:
-                    await self.hass.services.async_call("cover", "toggle", {"entity_id": switch_entity}, blocking=True)
+                targets = self._resolve_switch_entities(switch_entity)
+                for ent in targets:
+                    if mode == "close":
+                        await self.hass.services.async_call("cover", "close_cover", {"entity_id": ent}, blocking=True)
+                    elif mode == "open":
+                        await self.hass.services.async_call("cover", "open_cover", {"entity_id": ent}, blocking=True)
+                    else:
+                        await self.hass.services.async_call("cover", "toggle", {"entity_id": ent}, blocking=True)
 
             elif switch_type == GATE_SWITCH_TYPE_TOGGLE:
-                # Interrupteur bistable ON/OFF
-                domain = switch_entity.split(".")[0]
+                targets = self._resolve_switch_entities(switch_entity)
                 action = "turn_off" if mode == "close" else "turn_on"
-                await self.hass.services.async_call(domain, action, {"entity_id": switch_entity}, blocking=True)
+                for ent in targets:
+                    domain = ent.split(".")[0]
+                    await self.hass.services.async_call(domain, action, {"entity_id": ent}, blocking=True)
 
             now = dt_util.now()
             current_st = self._gate_state.get("state", "closed")
@@ -1010,8 +1064,8 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Si le portail est actuellement ouvert, relancer le timer
             sensor_id = cfg.get("sensor_entity")
             if sensor_id:
-                st = self.hass.states.get(sensor_id)
-                if st and self._is_gate_open_value(st.state, cfg):
+                _, is_open = self._get_gate_sensor_resolved_state(sensor_id, cfg)
+                if is_open:
                     timer_min = self._get_current_timer_minutes(cfg, now)
                     self._gate_state["state"] = "open"
                     self._gate_state["target_close_time"] = (now + timedelta(minutes=timer_min)).isoformat()
