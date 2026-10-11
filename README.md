@@ -1,11 +1,12 @@
 # <p align="center"><img src="images/icon@2x.png" alt="DomoLink-Planification Logo" width="120"><br>🗓️ DomoLink-Planification</p>
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/default)
-[![version](https://img.shields.io/badge/version-v1.3.0-blue.svg)](https://github.com/SocrateMobile/DomoLink-Planification/releases)
+[![version](https://img.shields.io/badge/version-v1.4.0-blue.svg)](https://github.com/SocrateMobile/DomoLink-Planification/releases)
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.4+-41BDF5.svg)](https://www.home-assistant.io)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Socrate-FFDD00?logo=buy-me-a-coffee&logoColor=000000)](https://buymeacoffee.com/Socrate)
 
-**DomoLink-Planification** est une intégration Home Assistant haut de gamme conçue pour orchestrer des déclenchements temporels avancés, des déclencheurs de présence géolocalisée (zones), des planifications récurrentes contextuelles, et une **gestion bioclimatique solaire ultra-précise des volets roulants**.
+**DomoLink-Planification** est une intégration Home Assistant haut de gamme conçue pour orchestrer des déclenchements temporels avancés, des déclencheurs de présence géolocalisée (zones), des planifications récurrentes contextuelles, la **gestion bioclimatique solaire ultra-précise des volets roulants**, et le **contrôle universel automatisé de portail & accès**.
 
 [![Buy Me A Coffee](https://img.buymeacoffee.com/button-api/?text=Buy+me+a+coffee&emoji=☕&slug=Socrate&button_colour=FFDD00&font_colour=000000&font_family=Poppins&outline_colour=000000&coffee_colour=ffffff)](https://www.buymeacoffee.com/Socrate)
 
@@ -60,6 +61,20 @@ Moteur autonome (sans API tierce) pour :
 
 ---
 
+### 7. 🚪 Portail & Accès Universel (Nouveauté v1.4.0)
+* **Fermeture automatique intelligente après oubli** : Compte à rebours dynamique différencié Jour (ex: 10 min) et Nuit (ex: 3 min).
+* **Détection d'obstacles et vérification de course** : Contrôle après manœuvre (ex: 60s), envoi d'alertes SMS/notifications en cas de blocage et relances programmées (jusqu'à 6 tentatives).
+* **Modes Maintien ouvert** : Boutons 1-clic pour suspendre l'auto-fermeture (15 min, 30 min, 1h, Permanent).
+* **Compatibilité universelle** :
+  * Relais à contact sec / impulsion (ex: Shelly 1, Shelly Uni) avec durée d'impulsion réglable.
+  * Deux contacts séparés (ouverture / fermeture distinctes).
+  * Entités Portail natives Home Assistant (`cover.*`).
+  * Interrupteurs bistables classiques (ON / OFF).
+  * Inversion de polarité du capteur magnétique intégrée.
+* **Visuel interactif animé en SVG** : Portail temps réel avec gyrophare, barre de progression et Easter egg sonore 8-bit.
+
+---
+
 ## 🚀 Installation
 
 ### Via HACS (Recommandé)
@@ -80,6 +95,15 @@ Moteur autonome (sans API tierce) pour :
 | `domolink_planification.set_schedule_enabled` | Active ou suspend une règle | `schedule_id`, `enabled` (bool) |
 
 ---
+---
+
+## ☕ Soutenir le projet / Support
+
+Si vous appréciez cette intégration et souhaitez soutenir son développement continu ainsi que la maintenance des futures versions :
+
+<a href="https://buymeacoffee.com/Socrate" target="_blank">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50" width="210">
+</a>
 
 ## 📄 Licence
 Ce projet est sous licence MIT. Développé par **SocrateMobile** & **Jean-Frédéric Lavigne**.

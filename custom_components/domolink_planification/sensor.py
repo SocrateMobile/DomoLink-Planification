@@ -32,6 +32,9 @@ async def async_setup_entry(
     global_entities = [
         PlanificationActiveCountSensor(coordinator, entry),
         PlanificationLastActionSensor(coordinator, entry),
+        GateStatusSensor(coordinator, entry),
+        GateCountdownSensor(coordinator, entry),
+        GateRetriesSensor(coordinator, entry),
     ]
     async_add_entities(global_entities)
 
@@ -183,3 +186,99 @@ class PlanificationLastActionSensor(CoordinatorEntity[DomolinkPlanificationCoord
             "manufacturer": "DomoLink",
             "model": "Planification & Suivi Solaire",
         }
+
+
+class GateStatusSensor(CoordinatorEntity[DomolinkPlanificationCoordinator], SensorEntity):
+    """Capteur d'état du portail (fermé, ouvert, fermeture en cours, obstacle, maintien)."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Portail Statut"
+    _attr_icon = "mdi:gate"
+
+    def __init__(self, coordinator: DomolinkPlanificationCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self.entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_gate_status_sensor"
+
+    @property
+    def native_value(self) -> str:
+        gate_info = (self.coordinator.data or {}).get("gate", {})
+        return str(gate_info.get("state", "closed"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        gate_info = (self.coordinator.data or {}).get("gate", {})
+        return {
+            "is_open": gate_info.get("is_open", False),
+            "countdown_seconds": gate_info.get("countdown_seconds", 0),
+            "retries_done": gate_info.get("retries_done", 0),
+            "max_retries": gate_info.get("max_retries", 6),
+            "last_action": gate_info.get("last_action"),
+            "hold_open": gate_info.get("hold_open", False),
+            "hold_open_until": gate_info.get("hold_open_until"),
+        }
+
+    @property
+    def device_info(self) -> dict[str, Any]:
+        return {
+            "identifiers": {(DOMAIN, "gate")},
+            "name": "DomoLink Portail",
+            "manufacturer": "DomoLink",
+            "model": "Contrôleur d'Accès Universel",
+        }
+
+
+class GateCountdownSensor(CoordinatorEntity[DomolinkPlanificationCoordinator], SensorEntity):
+    """Capteur indiquant le temps restant en secondes avant la fermeture automatique."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Portail Décompte Fermeture"
+    _attr_icon = "mdi:timer-sand"
+    _attr_native_unit_of_measurement = "s"
+
+    def __init__(self, coordinator: DomolinkPlanificationCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self.entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_gate_countdown_sensor"
+
+    @property
+    def native_value(self) -> int:
+        gate_info = (self.coordinator.data or {}).get("gate", {})
+        return int(gate_info.get("countdown_seconds", 0))
+
+    @property
+    def device_info(self) -> dict[str, Any]:
+        return {
+            "identifiers": {(DOMAIN, "gate")},
+            "name": "DomoLink Portail",
+            "manufacturer": "DomoLink",
+            "model": "Contrôleur d'Accès Universel",
+        }
+
+
+class GateRetriesSensor(CoordinatorEntity[DomolinkPlanificationCoordinator], SensorEntity):
+    """Nombre de tentatives effectuées en cas d'obstacle."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Portail Tentatives Obstacle"
+    _attr_icon = "mdi:alert-circle-outline"
+
+    def __init__(self, coordinator: DomolinkPlanificationCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self.entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_gate_retries_sensor"
+
+    @property
+    def native_value(self) -> int:
+        gate_info = (self.coordinator.data or {}).get("gate", {})
+        return int(gate_info.get("retries_done", 0))
+
+    @property
+    def device_info(self) -> dict[str, Any]:
+        return {
+            "identifiers": {(DOMAIN, "gate")},
+            "name": "DomoLink Portail",
+            "manufacturer": "DomoLink",
+            "model": "Contrôleur d'Accès Universel",
+        }
+
