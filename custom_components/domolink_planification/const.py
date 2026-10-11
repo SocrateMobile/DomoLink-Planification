@@ -1,18 +1,10 @@
 """Constantes pour l'intégration DomoLink-Planification."""
 
-import json
-import os
-from typing import Final
+from typing import Any, Final
 
 DOMAIN: Final = "domolink_planification"
 NAME: Final = "DomoLink-Planification"
-
-_MANIFEST_PATH = os.path.join(os.path.dirname(__file__), "manifest.json")
-try:
-    with open(_MANIFEST_PATH, "r", encoding="utf-8") as _f:
-        VERSION: Final = json.load(_f).get("version", "unknown")
-except Exception:
-    VERSION: Final = "unknown"
+VERSION: Final = "1.4.0"
 
 # Panneau Lovelace & Frontend
 PANEL_URL_PATH: Final = "domolink-planification"
@@ -141,3 +133,30 @@ SHADING_MODE_WINTER: Final = "winter"  # Gain solaire passif
 # Stockage
 STORAGE_KEY: Final = "domolink_planification_data"
 STORAGE_VERSION: Final = 1
+
+# --- SECTION PORTAIL & ACCÈS ---
+GATE_SWITCH_TYPE_PULSE: Final = "pulse"    # Contact sec / impulsion unique
+GATE_SWITCH_TYPE_DUAL: Final = "dual"      # Commandes séparées (Ouvrir / Fermer)
+GATE_SWITCH_TYPE_COVER: Final = "cover"    # Entité cover existante
+GATE_SWITCH_TYPE_TOGGLE: Final = "toggle"  # Interrupteur bistable ON/OFF
+
+DEFAULT_GATE_CONFIG: Final[dict[str, Any]] = {
+    "enabled": True,
+    "switch_type": GATE_SWITCH_TYPE_PULSE,
+    "switch_entity": "switch.shelly_ouverture_portail_voiture",
+    "close_switch_entity": "",
+    "sensor_entity": "binary_sensor.etat_du_portail",
+    "sensor_inverted": False,
+    "notify_service": "notify.free_mobile_sms_enghien_enghien",
+    "timer_day_minutes": 10,
+    "timer_night_minutes": 3,
+    "day_start": "07:00",
+    "night_start": "22:00",
+    "max_retries": 6,
+    "pulse_duration": 1.0,
+    "check_delay": 60,
+    "retry_interval_minutes": 10,
+    "hold_open": False,
+    "hold_open_until": None,
+}
+

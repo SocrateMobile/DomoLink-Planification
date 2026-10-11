@@ -26,7 +26,11 @@ async def async_setup_entry(
     added_ids: set[str] = set()
 
     # Bouton global de réévaluation des volets
-    async_add_entities([PlanificationSolarRefreshButton(coordinator, entry)])
+    async_add_entities([
+        PlanificationSolarRefreshButton(coordinator, entry),
+        GateTriggerButton(coordinator, entry),
+        GateCloseButton(coordinator, entry),
+    ])
 
     @callback
     def _update_entities() -> None:
@@ -107,3 +111,56 @@ class PlanificationSolarRefreshButton(CoordinatorEntity[DomolinkPlanificationCoo
             "manufacturer": "DomoLink",
             "model": "Planification & Suivi Solaire",
         }
+
+
+class GateTriggerButton(CoordinatorEntity[DomolinkPlanificationCoordinator], ButtonEntity):
+    """Bouton pour actionner le portail (impulsion ouverture / arrêt / fermeture)."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Portail Actionner"
+    _attr_icon = "mdi:gate"
+
+    def __init__(self, coordinator: DomolinkPlanificationCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self.entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_gate_trigger_button"
+
+    async def async_press(self) -> None:
+        """Déclenche la commande du portail."""
+        await self.coordinator.async_gate_trigger_action(mode="toggle")
+
+    @property
+    def device_info(self) -> dict[str, Any]:
+        return {
+            "identifiers": {(DOMAIN, "gate")},
+            "name": "DomoLink Portail",
+            "manufacturer": "DomoLink",
+            "model": "Contrôleur d'Accès Universel",
+        }
+
+
+class GateCloseButton(CoordinatorEntity[DomolinkPlanificationCoordinator], ButtonEntity):
+    """Bouton pour forcer la fermeture immédiate du portail."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Portail Fermer"
+    _attr_icon = "mdi:gate-arrow-right"
+
+    def __init__(self, coordinator: DomolinkPlanificationCoordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self.entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_gate_close_button"
+
+    async def async_press(self) -> None:
+        """Déclenche la fermeture du portail."""
+        await self.coordinator.async_gate_trigger_action(mode="close")
+
+    @property
+    def device_info(self) -> dict[str, Any]:
+        return {
+            "identifiers": {(DOMAIN, "gate")},
+            "name": "DomoLink Portail",
+            "manufacturer": "DomoLink",
+            "model": "Contrôleur d'Accès Universel",
+        }
+

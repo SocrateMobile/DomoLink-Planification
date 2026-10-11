@@ -721,15 +721,147 @@
       color: #94a3b8;
       margin-top: 4px;
     }
+
+    /* --- SECTION PORTAIL & ACCÈS --- */
+    .gate-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+    @media (min-width: 1024px) {
+      .gate-grid {
+        grid-template-columns: 1.2fr 0.8fr;
+      }
+    }
+    .gate-card {
+      background: rgba(30, 41, 59, 0.6);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    .gate-hero-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .gate-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none;
+    }
+    .gate-badge.closed { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+    .gate-badge.open { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+    .gate-badge.closing { background: rgba(6, 182, 212, 0.2); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.4); }
+    .gate-badge.obstacle { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+    .gate-badge.hold_open { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); }
+    
+    .gate-scene {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 180px;
+      background: radial-gradient(circle at center, rgba(30, 58, 138, 0.25) 0%, rgba(15, 23, 42, 0.6) 100%);
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      margin-bottom: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    .gate-svg {
+      width: 280px;
+      height: 160px;
+    }
+    .gate-countdown-wrap {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .gate-countdown-num {
+      font-size: 44px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      color: #f8fafc;
+      text-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+      font-variant-numeric: tabular-nums;
+    }
+    .gate-countdown-lbl {
+      font-size: 14px;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
+    .gate-btn-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: center;
+    }
+    .gate-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+    }
+    .gate-btn-primary {
+      background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+      color: white;
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+    }
+    .gate-btn-primary:hover {
+      background: linear-gradient(135deg, #60a5fa, #2563eb);
+      transform: translateY(-1px);
+    }
+    .gate-btn-hold {
+      background: rgba(168, 85, 247, 0.15);
+      color: #d8b4fe;
+      border: 1px solid rgba(168, 85, 247, 0.4);
+    }
+    .gate-btn-hold:hover {
+      background: rgba(168, 85, 247, 0.3);
+    }
+    .gate-btn-close {
+      background: rgba(239, 68, 68, 0.15);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+    }
+    .gate-btn-close:hover {
+      background: rgba(239, 68, 68, 0.3);
+    }
+    .gate-history-item {
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+    }
+    .gate-history-item:last-child { border-bottom: none; }
   `;
 
   class DomolinkPlanificationPanel extends HTMLElement {
     constructor() {
       super();
       this.attachShadow({ mode: "open" });
-      this._data = { schedules: {}, history: [], settings: {}, next_runs: {}, solar_states: {} };
+      this._data = { schedules: {}, history: [], settings: {}, next_runs: {}, solar_states: {}, gate: {}, gate_history: [] };
       this._activeTab = "schedules";
       this._editingSchedule = null;
+      this._gateEasterEggCount = 0;
+      this._gatePollTimer = null;
     }
 
     set hass(hass) {
@@ -743,6 +875,20 @@
     connectedCallback() {
       if (typeof applySidebarBadge === "function") {
         applySidebarBadge();
+      }
+      if (!this._gatePollTimer) {
+        this._gatePollTimer = setInterval(() => {
+          if (this._activeTab === "gate" && this._hass) {
+            this._fetchData();
+          }
+        }, 4000);
+      }
+    }
+
+    disconnectedCallback() {
+      if (this._gatePollTimer) {
+        clearInterval(this._gatePollTimer);
+        this._gatePollTimer = null;
       }
     }
 
@@ -924,6 +1070,10 @@
             <ha-icon icon="mdi:weather-sunny"></ha-icon>
             <span>Volets Solaires (${solarSchedules.length})</span>
           </div>
+          <div class="tab ${this._activeTab === 'gate' ? 'active' : ''}" data-tab="gate">
+            <ha-icon icon="mdi:gate"></ha-icon>
+            <span>Portail & Accès</span>
+          </div>
           <div class="tab ${this._activeTab === 'history' ? 'active' : ''}" data-tab="history">
             <ha-icon icon="mdi:history"></ha-icon>
             <span>Historique Audit</span>
@@ -1024,9 +1174,18 @@
           await this._fetchData();
         });
       }
+
+      // 5. Gestion des événements du Portail & Accès
+      if (this._activeTab === "gate") {
+        this._attachGateEvents();
+      }
     }
 
     _renderActiveTabContent(timeSchedules, solarSchedules, sunAzimuth, sunElevation) {
+      if (this._activeTab === "gate") {
+        return this._renderGateTabContent();
+      }
+
       if (this._activeTab === "schedules") {
         if (timeSchedules.length === 0) {
           return `
@@ -1132,6 +1291,440 @@
       }
       return "";
     }
+
+    _formatGateCountdown(seconds) {
+      if (!seconds || seconds <= 0) return "00:00";
+      const m = Math.floor(seconds / 60);
+      const s = seconds % 60;
+      return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    }
+
+    _renderGateTabContent() {
+      const gate = this._data.gate || {};
+      const cfg = gate.config || {};
+      const state = gate.state || "closed";
+      const isAutoEnabled = cfg.enabled !== false;
+      const isHoldOpen = gate.hold_open === true;
+      const countdownSec = gate.countdown_seconds || 0;
+      const countdownFormatted = this._formatGateCountdown(countdownSec);
+
+      let badgeClass = "closed";
+      let badgeLabel = "Portail Sécurisé & Fermé";
+      let badgeIcon = "mdi:gate";
+
+      if (state === "open") {
+        badgeClass = "open";
+        badgeLabel = isAutoEnabled ? "Portail Ouvert (Fermeture programmée)" : "Portail Ouvert (Fermeture auto désactivée)";
+        badgeIcon = "mdi:gate-open";
+      } else if (state === "closing") {
+        badgeClass = "closing";
+        badgeLabel = "Fermeture automatique en cours...";
+        badgeIcon = "mdi:gate-arrow-right";
+      } else if (state === "obstacle") {
+        badgeClass = "obstacle";
+        badgeLabel = `⚠️ Obstacle Détecté (Essai ${gate.retries_done}/${gate.max_retries})`;
+        badgeIcon = "mdi:alert-octagon";
+      } else if (state === "hold_open" || isHoldOpen) {
+        badgeClass = "hold_open";
+        badgeLabel = "⏸️ Maintien Ouvert Actif (Fermeture en pause)";
+        badgeIcon = "mdi:lock-open-variant";
+      }
+
+      const historyList = (this._data.gate_history || gate.history || []).slice(0, 10);
+
+      const leftGateAngle = (state === "closed") ? 0 : ((state === "closing") ? 35 : 70);
+      const rightGateAngle = (state === "closed") ? 0 : ((state === "closing") ? -35 : -70);
+      const gateGlowColor = (state === "closed") ? "#10b981" : ((state === "obstacle") ? "#ef4444" : ((state === "hold_open" || isHoldOpen) ? "#a855f7" : "#3b82f6"));
+
+      return `
+        <div class="gate-grid">
+          <div class="gate-card">
+            <div class="gate-hero-header">
+              <div>
+                <h2 style="margin: 0; font-size: 20px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px;">
+                  <ha-icon icon="mdi:gate" style="color: ${gateGlowColor};"></ha-icon>
+                  <span>Contrôleur de Portail DomoLink</span>
+                </h2>
+                <div style="font-size: 13px; color: #94a3b8; margin-top: 4px;">
+                  Mode : ${gate.is_day ? "☀️ Période Jour (" + (cfg.timer_day_minutes || 10) + " min)" : "🌙 Période Nuit (" + (cfg.timer_night_minutes || 3) + " min)"}
+                </div>
+              </div>
+              <div class="gate-badge ${badgeClass}" id="gate-badge-easter-egg" title="Cliquez 5 fois pour un clin d'œil spécial !">
+                <ha-icon icon="${badgeIcon}"></ha-icon>
+                <span>${badgeLabel}</span>
+              </div>
+            </div>
+
+            <div class="gate-scene" id="gate-scene-box">
+              <svg class="gate-svg" viewBox="0 0 300 160">
+                <defs>
+                  <filter id="gate-glow" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="4" result="blur" />
+                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                  </filter>
+                </defs>
+                <line x1="20" y1="130" x2="280" y2="130" stroke="rgba(255,255,255,0.2)" stroke-width="2" />
+                <rect x="35" y="25" width="22" height="105" rx="3" fill="#334155" stroke="rgba(255,255,255,0.2)" />
+                <rect x="31" y="20" width="30" height="7" rx="2" fill="#475569" />
+                <circle cx="46" cy="15" r="4" fill="${gateGlowColor}" filter="url(#gate-glow)" />
+                <rect x="243" y="25" width="22" height="105" rx="3" fill="#334155" stroke="rgba(255,255,255,0.2)" />
+                <rect x="239" y="20" width="30" height="7" rx="2" fill="#475569" />
+                <circle cx="254" cy="15" r="4" fill="${gateGlowColor}" filter="url(#gate-glow)" />
+                <g style="transform-origin: 57px 125px; transform: rotate(${leftGateAngle}deg); transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);">
+                  <rect x="57" y="35" width="90" height="90" rx="4" fill="rgba(30, 41, 59, 0.85)" stroke="${gateGlowColor}" stroke-width="2" />
+                  <line x1="75" y1="35" x2="75" y2="125" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" />
+                  <line x1="95" y1="35" x2="95" y2="125" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" />
+                  <line x1="115" y1="35" x2="115" y2="125" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" />
+                  <line x1="135" y1="35" x2="135" y2="125" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" />
+                  <line x1="57" y1="80" x2="147" y2="80" stroke="rgba(255,255,255,0.4)" stroke-width="2" />
+                </g>
+                <g style="transform-origin: 243px 125px; transform: rotate(${rightGateAngle}deg); transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);">
+                  <rect x="153" y="35" width="90" height="90" rx="4" fill="rgba(30, 41, 59, 0.85)" stroke="${gateGlowColor}" stroke-width="2" />
+                  <line x1="165" y1="35" x2="165" y2="125" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" />
+                  <line x1="185" y1="35" x2="185" y2="125" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" />
+                  <line x1="205" y1="35" x2="205" y2="125" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" />
+                  <line x1="225" y1="35" x2="225" y2="125" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" />
+                  <line x1="153" y1="80" x2="243" y2="80" stroke="rgba(255,255,255,0.4)" stroke-width="2" />
+                </g>
+              </svg>
+            </div>
+
+            <div class="gate-countdown-wrap">
+              <div class="gate-countdown-num" style="color: ${gateGlowColor};">
+                ${state === "closed" ? "00:00" : (isHoldOpen ? "PAUSE" : countdownFormatted)}
+              </div>
+              <div class="gate-countdown-lbl">
+                ${state === "closed" 
+                  ? "Portail fermé et sécurisé" 
+                  : (isHoldOpen 
+                      ? "Maintien ouvert actif (fermeture automatique en attente)" 
+                      : (state === "obstacle" 
+                          ? `Obstacle détecté : réessai dans ${countdownFormatted}` 
+                          : `Fermeture automatique dans ${countdownFormatted}`))}
+              </div>
+            </div>
+
+            <div class="gate-btn-group">
+              <button class="gate-btn gate-btn-primary" id="btn-gate-trigger">
+                <ha-icon icon="mdi:gate"></ha-icon>
+                <span>Actionner le Portail</span>
+              </button>
+              
+              ${isHoldOpen ? `
+                <button class="gate-btn gate-btn-hold" style="background: rgba(16, 185, 129, 0.2); border-color: rgba(16, 185, 129, 0.5); color: #34d399;" id="btn-gate-cancel-hold">
+                  <ha-icon icon="mdi:play-circle-outline"></ha-icon>
+                  <span>Annuler le Maintien</span>
+                </button>
+              ` : `
+                <button class="gate-btn gate-btn-hold" id="btn-gate-hold-15" title="Maintien pendant 15 minutes">
+                  <ha-icon icon="mdi:timer-outline"></ha-icon>
+                  <span>Maintien 15m</span>
+                </button>
+                <button class="gate-btn gate-btn-hold" id="btn-gate-hold-30" title="Maintien pendant 30 minutes">
+                  <ha-icon icon="mdi:timer-outline"></ha-icon>
+                  <span>30m</span>
+                </button>
+                <button class="gate-btn gate-btn-hold" id="btn-gate-hold-60" title="Maintien pendant 1 heure">
+                  <ha-icon icon="mdi:timer-outline"></ha-icon>
+                  <span>1h</span>
+                </button>
+                <button class="gate-btn gate-btn-hold" id="btn-gate-hold-inf" title="Maintien permanent (travaux / fête)">
+                  <ha-icon icon="mdi:lock-open-variant"></ha-icon>
+                  <span>Permanent</span>
+                </button>
+              `}
+
+              <button class="gate-btn gate-btn-close" id="btn-gate-close">
+                <ha-icon icon="mdi:gate-arrow-right"></ha-icon>
+                <span>Fermer Maintenant</span>
+              </button>
+            </div>
+
+            <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.08); display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <span style="font-weight: 600; font-size: 14px;">Surveillance & Fermeture Automatique</span>
+                <div style="font-size: 12px; color: #94a3b8;">Active la détection d'oubli et le cycle de fermeture</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="toggle-gate-enabled" ${isAutoEnabled ? 'checked' : ''}>
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="gate-card">
+            <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
+              <ha-icon icon="mdi:history"></ha-icon>
+              <span>Journal Récent du Portail</span>
+            </h3>
+            <div style="max-height: 480px; overflow-y: auto;">
+              ${historyList.length === 0 ? `
+                <div style="text-align: center; color: #94a3b8; padding: 40px 0; font-size: 13px;">
+                  Aucun événement enregistré pour le moment.
+                </div>
+              ` : historyList.map(h => {
+                const dateStr = h.timestamp ? new Date(h.timestamp).toLocaleTimeString() : "";
+                const isErr = h.status === "FAILED" || h.event === "OBSTACLE" || h.event === "ECHEC_CRITIQUE";
+                const isSucc = h.status === "SUCCESS" || h.status === "CLOSED";
+                const color = isErr ? "#f87171" : (isSucc ? "#34d399" : "#60a5fa");
+                return `
+                  <div class="gate-history-item">
+                    <div>
+                      <div style="font-weight: 600; color: ${color};">${h.event} — ${h.status}</div>
+                      <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">${h.details || ''}</div>
+                    </div>
+                    <div style="font-size: 11px; color: #64748b;">${dateStr}</div>
+                  </div>
+                `;
+              }).join("")}
+            </div>
+          </div>
+        </div>
+
+        <div class="gate-card" style="margin-top: 24px;">
+          <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 18px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+            <ha-icon icon="mdi:tune-vertical"></ha-icon>
+            <span>Paramétrage Universel du Matériel & Délais</span>
+          </h3>
+          <p style="font-size: 13px; color: #94a3b8; margin-top: -8px; margin-bottom: 20px;">
+            Configurez vos entités Home Assistant, le type de contact, le moyen de notification et les plages horaires selon votre installation.
+          </p>
+
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+            <div class="form-group">
+              <label>Type de Commande Portail</label>
+              <select class="form-control" id="gate-cfg-switch-type">
+                <option value="pulse" ${(cfg.switch_type || 'pulse') === 'pulse' ? 'selected' : ''}>Contact sec / Impulsion unique (Shelly, relais...)</option>
+                <option value="dual" ${cfg.switch_type === 'dual' ? 'selected' : ''}>Commandes séparées (Switch Ouvrir + Switch Fermer)</option>
+                <option value="cover" ${cfg.switch_type === 'cover' ? 'selected' : ''}>Entité Cover native (cover.*)</option>
+                <option value="toggle" ${cfg.switch_type === 'toggle' ? 'selected' : ''}>Interrupteur bistable ON/OFF</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Entité de Commande (Switch ou Cover)</label>
+              <input type="text" class="form-control" id="gate-cfg-switch-entity" value="${cfg.switch_entity || 'switch.shelly_ouverture_portail_voiture'}" placeholder="switch.votre_shelly_portail">
+            </div>
+
+            <div class="form-group" id="gate-cfg-dual-group" style="${cfg.switch_type === 'dual' ? '' : 'display:none;'}">
+              <label>Entité Dédiée à la Fermeture</label>
+              <input type="text" class="form-control" id="gate-cfg-close-switch-entity" value="${cfg.close_switch_entity || ''}" placeholder="switch.votre_relais_fermeture">
+            </div>
+
+            <div class="form-group">
+              <label>Durée de l'Impulsion (secondes)</label>
+              <input type="number" step="0.5" min="0.5" max="10" class="form-control" id="gate-cfg-pulse-duration" value="${cfg.pulse_duration || 1.0}">
+            </div>
+
+            <div class="form-group">
+              <label>Capteur d'État (Ouvert / Fermé)</label>
+              <input type="text" class="form-control" id="gate-cfg-sensor-entity" value="${cfg.sensor_entity || 'binary_sensor.etat_du_portail'}" placeholder="binary_sensor.etat_du_portail">
+            </div>
+
+            <div class="form-group" style="display: flex; flex-direction: column; justify-content: center;">
+              <label>Inversion Polarité du Capteur</label>
+              <div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
+                <label class="switch">
+                  <input type="checkbox" id="gate-cfg-sensor-inverted" ${cfg.sensor_inverted ? 'checked' : ''}>
+                  <span class="slider"></span>
+                </label>
+                <span style="font-size: 13px; color: #94a3b8;">Activer si 'on' = Fermé (inversé)</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Service / Canal de Notification</label>
+              <input type="text" class="form-control" id="gate-cfg-notify-service" value="${cfg.notify_service || 'notify.free_mobile_sms_enghien_enghien'}" placeholder="notify.free_mobile_sms... ou laisser vide">
+              <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Ex: notify.free_mobile_sms_xxx ou notify.notify (laisser vide pour désactiver)</div>
+            </div>
+
+            <div class="form-group">
+              <label>Délai Journée avant Fermeture (minutes)</label>
+              <input type="number" min="1" max="120" class="form-control" id="gate-cfg-timer-day" value="${cfg.timer_day_minutes || 10}">
+            </div>
+
+            <div class="form-group">
+              <label>Délai Nuit avant Fermeture (minutes)</label>
+              <input type="number" min="1" max="60" class="form-control" id="gate-cfg-timer-night" value="${cfg.timer_night_minutes || 3}">
+            </div>
+
+            <div class="form-group">
+              <label>Heure Début Journée</label>
+              <input type="time" class="form-control" id="gate-cfg-day-start" value="${cfg.day_start || '07:00'}">
+            </div>
+
+            <div class="form-group">
+              <label>Heure Début Nuit</label>
+              <input type="time" class="form-control" id="gate-cfg-night-start" value="${cfg.night_start || '22:00'}">
+            </div>
+
+            <div class="form-group">
+              <label>Tentatives Max en cas d'Obstacle</label>
+              <input type="number" min="1" max="15" class="form-control" id="gate-cfg-max-retries" value="${cfg.max_retries || 6}">
+            </div>
+
+            <div class="form-group">
+              <label>Temps d'attente de course / vérification (secondes)</label>
+              <input type="number" min="10" max="300" class="form-control" id="gate-cfg-check-delay" value="${cfg.check_delay || 60}">
+            </div>
+          </div>
+
+          <div style="margin-top: 24px;">
+            <button class="btn btn-primary" id="btn-save-gate-config" style="padding: 12px 24px; font-size: 15px;">
+              <ha-icon icon="mdi:content-save-outline"></ha-icon>
+              <span>Enregistrer la Configuration du Portail</span>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    _attachGateEvents() {
+      // 1. Bouton Actionner
+      const btnTrigger = this.shadowRoot.querySelector("#btn-gate-trigger");
+      if (btnTrigger) btnTrigger.addEventListener("click", () => this._gateAction("trigger"));
+
+      // 2. Bouton Fermer Maintenant
+      const btnClose = this.shadowRoot.querySelector("#btn-gate-close");
+      if (btnClose) btnClose.addEventListener("click", () => this._gateAction("close_now"));
+
+      // 3. Boutons Maintien
+      const btnHold15 = this.shadowRoot.querySelector("#btn-gate-hold-15");
+      if (btnHold15) btnHold15.addEventListener("click", () => this._gateAction("hold_open", 15));
+
+      const btnHold30 = this.shadowRoot.querySelector("#btn-gate-hold-30");
+      if (btnHold30) btnHold30.addEventListener("click", () => this._gateAction("hold_open", 30));
+
+      const btnHold60 = this.shadowRoot.querySelector("#btn-gate-hold-60");
+      if (btnHold60) btnHold60.addEventListener("click", () => this._gateAction("hold_open", 60));
+
+      const btnHoldInf = this.shadowRoot.querySelector("#btn-gate-hold-inf");
+      if (btnHoldInf) btnHoldInf.addEventListener("click", () => this._gateAction("hold_open", 0));
+
+      const btnCancelHold = this.shadowRoot.querySelector("#btn-gate-cancel-hold");
+      if (btnCancelHold) btnCancelHold.addEventListener("click", () => this._gateAction("cancel_hold_open"));
+
+      // 4. Toggle Surveillance / Fermeture Automatique
+      const toggleEnabled = this.shadowRoot.querySelector("#toggle-gate-enabled");
+      if (toggleEnabled) {
+        toggleEnabled.addEventListener("change", () => this._gateAction("toggle_enabled"));
+      }
+
+      // 5. Bascule dynamique dual switch dans les paramètres
+      const switchTypeSelect = this.shadowRoot.querySelector("#gate-cfg-switch-type");
+      const dualGroup = this.shadowRoot.querySelector("#gate-cfg-dual-group");
+      if (switchTypeSelect && dualGroup) {
+        switchTypeSelect.addEventListener("change", (e) => {
+          dualGroup.style.display = e.target.value === "dual" ? "block" : "none";
+        });
+      }
+
+      // 6. Enregistrement de la configuration
+      const btnSaveGate = this.shadowRoot.querySelector("#btn-save-gate-config");
+      if (btnSaveGate) {
+        btnSaveGate.addEventListener("click", () => this._saveGateConfig());
+      }
+
+      // 7. Easter Egg
+      const badgeEasterEgg = this.shadowRoot.querySelector("#gate-badge-easter-egg");
+      if (badgeEasterEgg) {
+        badgeEasterEgg.addEventListener("click", () => {
+          this._gateEasterEggCount = (this._gateEasterEggCount || 0) + 1;
+          if (this._gateEasterEggCount >= 5) {
+            this._gateEasterEggCount = 0;
+            this._triggerGateEasterEgg();
+          } else {
+            this._showToast(`✨ Clin d'œil DomoLink : ${5 - this._gateEasterEggCount} clic(s) restant(s)...`);
+          }
+        });
+      }
+    }
+
+    async _gateAction(action, durationMinutes = null) {
+      if (!this._hass) return;
+      try {
+        const body = { action };
+        if (durationMinutes !== null) body.duration_minutes = durationMinutes;
+        const res = await this._hass.fetchWithAuth("/api/domolink_planification/gate_action", {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.gate) this._data.gate = data.gate;
+          this._showToast("⚡ Commande envoyée au portail !");
+          await this._fetchData();
+        }
+      } catch (err) {
+        console.error("Erreur action portail:", err);
+        this._showToast("❌ Erreur lors de l'envoi de la commande.");
+      }
+    }
+
+    async _saveGateConfig() {
+      if (!this._hass) return;
+      const sr = this.shadowRoot;
+      const config = {
+        switch_type: sr.querySelector("#gate-cfg-switch-type")?.value || "pulse",
+        switch_entity: sr.querySelector("#gate-cfg-switch-entity")?.value?.trim() || "",
+        close_switch_entity: sr.querySelector("#gate-cfg-close-switch-entity")?.value?.trim() || "",
+        pulse_duration: parseFloat(sr.querySelector("#gate-cfg-pulse-duration")?.value || "1.0"),
+        sensor_entity: sr.querySelector("#gate-cfg-sensor-entity")?.value?.trim() || "",
+        sensor_inverted: sr.querySelector("#gate-cfg-sensor-inverted")?.checked || false,
+        notify_service: sr.querySelector("#gate-cfg-notify-service")?.value?.trim() || "",
+        timer_day_minutes: parseInt(sr.querySelector("#gate-cfg-timer-day")?.value || "10", 10),
+        timer_night_minutes: parseInt(sr.querySelector("#gate-cfg-timer-night")?.value || "3", 10),
+        day_start: sr.querySelector("#gate-cfg-day-start")?.value || "07:00",
+        night_start: sr.querySelector("#gate-cfg-night-start")?.value || "22:00",
+        max_retries: parseInt(sr.querySelector("#gate-cfg-max-retries")?.value || "6", 10),
+        check_delay: parseInt(sr.querySelector("#gate-cfg-check-delay")?.value || "60", 10),
+      };
+
+      try {
+        const res = await this._hass.fetchWithAuth("/api/domolink_planification/save_gate_config", {
+          method: "POST",
+          body: JSON.stringify(config),
+        });
+        if (res.ok) {
+          this._showToast("✅ Configuration du portail enregistrée !");
+          await this._fetchData();
+        }
+      } catch (err) {
+        console.error("Erreur sauvegarde config portail:", err);
+        this._showToast("❌ Erreur lors de l'enregistrement.");
+      }
+    }
+
+    _triggerGateEasterEgg() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          const notes = [523.25, 659.25, 783.99, 1046.50]; // Do, Mi, Sol, Do aigu
+          notes.forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.15, ctx.currentTime + idx * 0.1);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + idx * 0.1 + 0.25);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(ctx.currentTime + idx * 0.1);
+            osc.stop(ctx.currentTime + idx * 0.1 + 0.25);
+          });
+        }
+      } catch (e) {
+        console.log("Audio not allowed", e);
+      }
+      this._showToast("🛸 PROTOCOLE STARGATE : Portail Dimensionnel DomoLink Activé !");
+      const scene = this.shadowRoot.querySelector("#gate-scene-box");
+      if (scene) {
+        scene.style.boxShadow = "0 0 50px rgba(59, 130, 246, 0.9)";
+        setTimeout(() => { scene.style.boxShadow = ""; }, 3000);
+      }
+    }
+
 
     _renderScheduleCard(sched) {
       const isEnabled = sched.enabled !== false;

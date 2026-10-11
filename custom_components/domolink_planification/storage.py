@@ -10,6 +10,7 @@ from homeassistant.helpers.storage import Store
 
 from .const import (
     COUNTRY_FR,
+    DEFAULT_GATE_CONFIG,
     HOLIDAY_MODE_ALWAYS,
     STORAGE_KEY,
     STORAGE_VERSION,
@@ -33,6 +34,8 @@ class PlanificationStorage:
                 "presence_entity": None,
                 "alarm_entity": None,
             },
+            "gate": dict(DEFAULT_GATE_CONFIG),
+            "gate_history": [],
         }
 
     async def async_load(self) -> dict[str, Any]:
@@ -49,6 +52,10 @@ class PlanificationStorage:
                 "presence_entity": None,
                 "alarm_entity": None,
             })
+            gate_data = self.data.setdefault("gate", {})
+            for k, v in DEFAULT_GATE_CONFIG.items():
+                gate_data.setdefault(k, v)
+            self.data.setdefault("gate_history", [])
             _LOGGER.info("DomoLink-Planification: %d règle(s) chargée(s) depuis le stockage", len(self.data["schedules"]))
         else:
             _LOGGER.info("DomoLink-Planification: Nouveau stockage initialisé")
@@ -109,3 +116,31 @@ class PlanificationStorage:
         """Met à jour les paramètres généraux."""
         self.data.setdefault("settings", {}).update(new_settings)
         await self.async_save()
+
+    # -------------------------------------------------------------------------
+    # Gestion du Portail & Accès
+    # -------------------------------------------------------------------------
+    def get_gate_config(self) -> dict[str, Any]:
+        """Retourne la configuration du portail."""
+        cfg = dict(DEFAULT_GATE_CONFIG)
+        cfg.update(self.data.get("gate", {}))
+        return cfg
+
+    async def async_update_gate_config(self, new_config: dict[str, Any]) -> None:
+        """Met à jour la configuration du portail."""
+        gate_data = self.data.setdefault("gate", dict(DEFAULT_GATE_CONFIG))
+        gate_data.update(new_config)
+        await self.async_save()
+
+    def get_gate_history(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Retourne l'historique récent du portail."""
+        return list(reversed(self.data.get("gate_history", [])))[:limit]
+
+    async def async_add_gate_history(self, entry: dict[str, Any]) -> None:
+        """Ajoute une entrée dans l'historique du portail (garde 100 max)."""
+        history: list[dict[str, Any]] = self.data.setdefault("gate_history", [])
+        history.append(entry)
+        if len(history) > 100:
+            self.data["gate_history"] = history[-100:]
+        await self.async_save()
+

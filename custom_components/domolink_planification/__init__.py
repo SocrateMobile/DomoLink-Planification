@@ -188,8 +188,17 @@ class DomolinkPlanificationApiView(HomeAssistantView):
                 "settings": self.coordinator.storage.get_settings(),
                 "next_runs": self.coordinator.data.get("next_runs", {}),
                 "solar_states": self.coordinator.data.get("solar_states", {}),
+                "gate": self.coordinator.get_gate_status(),
+                "gate_history": self.coordinator.storage.get_gate_history(),
             }
             return self.json(data)
+
+        if action == "gate_data":
+            return self.json({
+                "gate": self.coordinator.get_gate_status(),
+                "gate_history": self.coordinator.storage.get_gate_history(),
+            })
+
         return self.json({"error": "Action inconnue"}, status=400)
 
     async def post(self, request: web.Request, action: str) -> web.Response:
@@ -224,5 +233,32 @@ class DomolinkPlanificationApiView(HomeAssistantView):
             await self.coordinator.storage.async_update_settings(body)
             self.coordinator.async_set_updated_data(await self.coordinator._async_update_data())
             return self.json({"status": "ok"})
+
+        if action == "save_gate_config":
+            await self.coordinator.storage.async_update_gate_config(body)
+            self.coordinator._init_gate_state_from_sensor()
+            self.coordinator.async_set_updated_data(await self.coordinator._async_update_data())
+            return self.json({"status": "ok", "gate": self.coordinator.get_gate_status()})
+
+        if action == "gate_action":
+            act = body.get("action")
+            if act == "trigger":
+                await self.coordinator.async_gate_trigger_action(mode="toggle")
+            elif act == "close_now":
+                await self.coordinator.async_gate_trigger_action(mode="close")
+            elif act == "open_now":
+                await self.coordinator.async_gate_trigger_action(mode="open")
+            elif act == "hold_open":
+                duration = body.get("duration_minutes")
+                await self.coordinator.async_gate_set_hold_open(True, duration_minutes=duration)
+            elif act == "cancel_hold_open":
+                await self.coordinator.async_gate_set_hold_open(False)
+            elif act == "toggle_enabled":
+                cfg = self.coordinator.storage.get_gate_config()
+                cfg["enabled"] = not cfg.get("enabled", True)
+                await self.coordinator.storage.async_update_gate_config(cfg)
+
+            self.coordinator.async_set_updated_data(await self.coordinator._async_update_data())
+            return self.json({"status": "ok", "gate": self.coordinator.get_gate_status()})
 
         return self.json({"error": "Action inconnue"}, status=400)
