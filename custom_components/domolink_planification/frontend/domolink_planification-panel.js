@@ -761,8 +761,9 @@
       user-select: none;
     }
     .gate-badge.closed { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
-    .gate-badge.open { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
-    .gate-badge.closing { background: rgba(6, 182, 212, 0.2); color: #22d3ee; border: 1px solid rgba(6, 182, 212, 0.4); }
+    .gate-badge.open { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); }
+    .gate-badge.opening { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+    .gate-badge.closing { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
     .gate-badge.obstacle { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
     .gate-badge.hold_open { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); }
     
@@ -839,18 +840,19 @@
       box-shadow: 0 0 12px #10b981;
     }
     .gate-scene.state-open .gate-pillar-beacon {
-      background: #3b82f6;
-      box-shadow: 0 0 12px #3b82f6;
+      background: #38bdf8;
+      box-shadow: 0 0 12px #38bdf8;
     }
+    .gate-scene.state-opening .gate-pillar-beacon,
     .gate-scene.state-closing .gate-pillar-beacon {
       background: #f59e0b;
       box-shadow: 0 0 16px #f59e0b;
-      animation: gateBeaconFlash 0.8s infinite alternate;
+      animation: gateBeaconFlash 0.5s infinite alternate;
     }
     .gate-scene.state-obstacle .gate-pillar-beacon {
       background: #ef4444;
       box-shadow: 0 0 18px #ef4444;
-      animation: gateBeaconFlash 0.4s infinite alternate;
+      animation: gateBeaconFlash 0.3s infinite alternate;
     }
     .gate-scene.state-hold_open .gate-pillar-beacon {
       background: #a855f7;
@@ -870,11 +872,11 @@
       height: 100px;
       background: linear-gradient(to bottom, #334155, #1e293b);
       border-top: 3px solid #475569;
-      opacity: 0.6;
+      opacity: 0.7;
       z-index: 5;
     }
     .gate-wall-wing.left { left: 0; width: calc(50% - 198px); }
-    .gate-wall-wing.right { right: 0; width: calc(50% - 198px); }
+    .gate-wall-wing.right { right: 0; width: calc(50% - 198px); z-index: 11; }
 
     .gate-stage {
       position: absolute;
@@ -886,13 +888,122 @@
       z-index: 8;
     }
 
+    /* --- Types de Portail (Coulissant, 2 Battants, 1 Battant) --- */
+    
+    .gate-ground-rail {
+      position: absolute;
+      bottom: 34px;
+      left: calc(50% - 195px);
+      width: 530px;
+      height: 4px;
+      background: linear-gradient(to right, #475569, #94a3b8, #64748b);
+      border-radius: 2px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.8);
+      z-index: 7;
+    }
+    .gate-rail-groove {
+      position: absolute;
+      top: 1px;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: #0f172a;
+    }
+
+    .gate-motor-box {
+      position: absolute;
+      bottom: 35px;
+      right: calc(50% - 194px);
+      width: 22px;
+      height: 28px;
+      background: linear-gradient(135deg, #1e293b, #0f172a);
+      border: 1px solid #475569;
+      border-radius: 3px;
+      z-index: 12;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.6);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+    }
+    .gate-motor-gear {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 2px dashed #94a3b8;
+    }
+    .gate-scene.state-opening .gate-motor-gear,
+    .gate-scene.state-closing .gate-motor-gear {
+      animation: gateGearSpin 1s linear infinite;
+    }
+    @keyframes gateGearSpin {
+      100% { transform: rotate(360deg); }
+    }
+    .gate-motor-led {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #10b981;
+      box-shadow: 0 0 4px #10b981;
+    }
+    .gate-scene.state-opening .gate-motor-led,
+    .gate-scene.state-closing .gate-motor-led {
+      background: #f59e0b;
+      box-shadow: 0 0 6px #f59e0b;
+      animation: gateBeaconFlash 0.4s infinite alternate;
+    }
+
+    /* Vantail Coulissant */
+    .gate-coulissant-panel {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      transform-style: preserve-3d;
+      will-change: transform;
+      z-index: 8;
+      transition: transform 0.4s ease-out;
+    }
+    .gate-coulissant-panel .gate-wheel {
+      position: absolute;
+      bottom: -4px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #94a3b8;
+      border: 2px solid #334155;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.6);
+      z-index: 9;
+    }
+    .gate-coulissant-panel .gate-wheel.left { left: 16px; }
+    .gate-coulissant-panel .gate-wheel.right { right: 16px; }
+
+    /* Vantail Battant Simple (1 vantail pleine largeur) */
+    .gate-single-leaf {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      transform-style: preserve-3d;
+      transform-origin: left center;
+      will-change: transform;
+      z-index: 8;
+      transition: transform 0.4s ease-out;
+    }
+
+    /* Vantaux Battant Double (2 vantaux) */
     .gate-leaf {
       position: absolute;
       top: 0;
       bottom: 0;
       width: 50%;
       transform-style: preserve-3d;
-      transition: transform 1.2s cubic-bezier(0.25, 1, 0.5, 1);
+      will-change: transform;
+      z-index: 8;
+      transition: transform 0.4s ease-out;
     }
     .gate-leaf.left {
       left: 0;
@@ -927,6 +1038,7 @@
       border-color: #38bdf8;
       box-shadow: 0 8px 25px rgba(0,0,0,0.6), inset 0 0 12px rgba(56, 189, 248, 0.25);
     }
+    .gate-scene.state-opening .gate-frame,
     .gate-scene.state-closing .gate-frame {
       border-color: #f59e0b;
       box-shadow: 0 8px 25px rgba(0,0,0,0.6), inset 0 0 12px rgba(245, 158, 11, 0.25);
@@ -1002,20 +1114,67 @@
       z-index: 9;
     }
 
-    .gate-scene.state-closed .gate-leaf.left { transform: rotateY(0deg); }
-    .gate-scene.state-closed .gate-leaf.right { transform: rotateY(0deg); }
-    
-    .gate-scene.state-open .gate-leaf.left { transform: rotateY(-72deg); }
-    .gate-scene.state-open .gate-leaf.right { transform: rotateY(72deg); }
+    /* Positions statiques COULISSANT */
+    .gate-type-coulissant.state-closed .gate-coulissant-panel { transform: translateX(0px); }
+    .gate-type-coulissant.state-open .gate-coulissant-panel { transform: translateX(315px); }
+    .gate-type-coulissant.state-hold_open .gate-coulissant-panel { transform: translateX(315px); }
+    .gate-type-coulissant.state-obstacle .gate-coulissant-panel { transform: translateX(150px); }
 
-    .gate-scene.state-closing .gate-leaf.left { transform: rotateY(-34deg); }
-    .gate-scene.state-closing .gate-leaf.right { transform: rotateY(34deg); }
+    /* Positions statiques DOUBLE BATTANT (ouverture vers l'intérieur de la propriété) */
+    .gate-type-double_battant.state-closed .gate-leaf.left { transform: rotateY(0deg); }
+    .gate-type-double_battant.state-closed .gate-leaf.right { transform: rotateY(0deg); }
+    .gate-type-double_battant.state-open .gate-leaf.left { transform: rotateY(85deg); }
+    .gate-type-double_battant.state-open .gate-leaf.right { transform: rotateY(-85deg); }
+    .gate-type-double_battant.state-hold_open .gate-leaf.left { transform: rotateY(85deg); }
+    .gate-type-double_battant.state-hold_open .gate-leaf.right { transform: rotateY(-85deg); }
+    .gate-type-double_battant.state-obstacle .gate-leaf.left { transform: rotateY(40deg); }
+    .gate-type-double_battant.state-obstacle .gate-leaf.right { transform: rotateY(-40deg); }
 
-    .gate-scene.state-obstacle .gate-leaf.left { transform: rotateY(-50deg); }
-    .gate-scene.state-obstacle .gate-leaf.right { transform: rotateY(50deg); }
+    /* Positions statiques SIMPLE BATTANT */
+    .gate-type-simple_battant.state-closed .gate-single-leaf { transform: rotateY(0deg); }
+    .gate-type-simple_battant.state-open .gate-single-leaf { transform: rotateY(85deg); }
+    .gate-type-simple_battant.state-hold_open .gate-single-leaf { transform: rotateY(85deg); }
+    .gate-type-simple_battant.state-obstacle .gate-single-leaf { transform: rotateY(40deg); }
 
-    .gate-scene.state-hold_open .gate-leaf.left { transform: rotateY(-72deg); }
-    .gate-scene.state-hold_open .gate-leaf.right { transform: rotateY(72deg); }
+    /* Barre HUD de progression de manœuvre */
+    .gate-hud-progress {
+      position: absolute;
+      bottom: 8px;
+      left: 16px;
+      right: 16px;
+      background: rgba(15, 23, 42, 0.9);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 8px;
+      padding: 6px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      z-index: 20;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    }
+    .gate-hud-progress-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: #f8fafc;
+    }
+    .gate-hud-progress-bar {
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      overflow: hidden;
+      width: 100%;
+    }
+    .gate-hud-progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #38bdf8, #818cf8);
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+      transition: width 0.15s linear;
+    }
 
     @media (max-width: 520px) {
       .gate-scene {
@@ -1186,6 +1345,10 @@
       if (this._gatePollTimer) {
         clearInterval(this._gatePollTimer);
         this._gatePollTimer = null;
+      }
+      if (this._gateAnimInterval) {
+        clearInterval(this._gateAnimInterval);
+        this._gateAnimInterval = null;
       }
     }
 
@@ -1639,6 +1802,22 @@
 
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
               <div class="form-group">
+                <label>Architecture & Type de Portail (Rendu 3D)</label>
+                <select class="form-control" id="gate-cfg-type">
+                  <option value="coulissant" ${(cfg.gate_type || 'coulissant') === 'coulissant' ? 'selected' : ''}>🚪 Portail Coulissant (1 vantail latéral)</option>
+                  <option value="double_battant" ${cfg.gate_type === 'double_battant' ? 'selected' : ''}>🚪 Portail Battant Double (2 vantaux)</option>
+                  <option value="simple_battant" ${cfg.gate_type === 'simple_battant' ? 'selected' : ''}>🚪 Portail Battant Simple (1 vantail)</option>
+                </select>
+                <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Adapte le rendu 3D et le comportement de la manœuvre</div>
+              </div>
+
+              <div class="form-group">
+                <label>Durée de Course / Manœuvre (secondes)</label>
+                <input type="number" min="3" max="120" step="1" class="form-control" id="gate-cfg-travel-time" value="${cfg.travel_time || 15}">
+                <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Temps réel pour l'animation progressive d'ouverture/fermeture (ex: 15s)</div>
+              </div>
+
+              <div class="form-group">
                 <label>Type de Commande Portail</label>
                 <select class="form-control" id="gate-cfg-switch-type">
                   <option value="pulse" ${(cfg.switch_type || 'pulse') === 'pulse' ? 'selected' : ''}>Contact sec / Impulsion unique (Shelly, relais...)</option>
@@ -1857,7 +2036,7 @@
 
             <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
               <div style="font-size: 13px; color: #94a3b8;">
-                DomoLink-Planification version <span style="font-weight: 700; color: #38bdf8;">v2.0.0</span> • Conçu par SocrateMobile & JFL
+                DomoLink-Planification version <span style="font-weight: 700; color: #38bdf8;">v2.0.1</span> • Conçu par SocrateMobile & JFL
               </div>
               <div style="display: flex; gap: 12px;">
                 <a href="https://github.com/SocrateMobile/DomoLink-Planification" target="_blank" style="color: #38bdf8; text-decoration: none; font-size: 13px; display: flex; align-items: center; gap: 4px;">
@@ -1884,6 +2063,8 @@
       const gate = this._data.gate || {};
       const cfg = gate.config || {};
       const state = gate.state || "closed";
+      const gateType = cfg.gate_type || "coulissant";
+      const travelTime = parseInt(cfg.travel_time || "15", 10);
       const isAutoEnabled = cfg.enabled !== false;
       const isHoldOpen = gate.hold_open === true;
       const countdownSec = gate.countdown_seconds || 0;
@@ -1893,13 +2074,17 @@
       let badgeLabel = "Portail Sécurisé & Fermé";
       let badgeIcon = "mdi:gate";
 
-      if (state === "open") {
+      if (state === "opening") {
+        badgeClass = "opening";
+        badgeLabel = "🔄 Ouverture en cours...";
+        badgeIcon = "mdi:gate-arrow-left";
+      } else if (state === "open") {
         badgeClass = "open";
         badgeLabel = isAutoEnabled ? "Portail Ouvert (Fermeture programmée)" : "Portail Ouvert (Fermeture auto désactivée)";
         badgeIcon = "mdi:gate-open";
       } else if (state === "closing") {
         badgeClass = "closing";
-        badgeLabel = "Fermeture automatique en cours...";
+        badgeLabel = "🔄 Fermeture en cours...";
         badgeIcon = "mdi:gate-arrow-right";
       } else if (state === "obstacle") {
         badgeClass = "obstacle";
@@ -1912,8 +2097,102 @@
       }
 
       const historyList = (this._data.gate_history || gate.history || []).slice(0, 10);
-      const sceneStateClass = (state === "closed") ? "state-closed" : ((state === "closing") ? "state-closing" : ((state === "obstacle") ? "state-obstacle" : ((state === "hold_open" || isHoldOpen) ? "state-hold_open" : "state-open")));
-      const gateGlowColor = (state === "closed") ? "#10b981" : ((state === "obstacle") ? "#ef4444" : ((state === "hold_open" || isHoldOpen) ? "#a855f7" : "#3b82f6"));
+      const sceneStateClass = `gate-type-${gateType} ${state === "closed" ? "state-closed" : (state === "opening" ? "state-opening" : (state === "closing" ? "state-closing" : (state === "obstacle" ? "state-obstacle" : (isHoldOpen ? "state-hold_open" : "state-open"))))}`;
+      const gateGlowColor = (state === "closed") ? "#10b981" : ((state === "opening" || state === "closing") ? "#f59e0b" : ((state === "obstacle") ? "#ef4444" : ((isHoldOpen) ? "#a855f7" : "#38bdf8")));
+      const isMoving = state === "opening" || state === "closing";
+
+      // Génération de l'architecture physique du portail selon le type choisi
+      let gateStageContent = "";
+      if (gateType === "coulissant") {
+        gateStageContent = `
+          <div class="gate-ground-rail"><div class="gate-rail-groove"></div></div>
+          <div class="gate-motor-box">
+            <div class="gate-motor-gear"></div>
+            <div class="gate-motor-led"></div>
+          </div>
+          <div class="gate-stage">
+            <div class="gate-coulissant-panel" id="gate-active-panel">
+              <div class="gate-frame">
+                <div class="gate-bars">
+                  <div class="gate-slat"></div>
+                  <div class="gate-slat"></div>
+                  <div class="gate-slat"></div>
+                  <div class="gate-slat"></div>
+                  <div class="gate-slat"></div>
+                  <div class="gate-slat"></div>
+                </div>
+                <div class="gate-diagonal" style="left: 28%;"></div>
+                <div class="gate-diagonal" style="left: 72%;"></div>
+                <div class="gate-handle" style="left: 12px;"></div>
+              </div>
+              <div class="gate-wheel left"></div>
+              <div class="gate-wheel right"></div>
+            </div>
+          </div>
+        `;
+      } else if (gateType === "simple_battant") {
+        gateStageContent = `
+          <div class="gate-ground-stopper" style="left: calc(50% + 155px);"></div>
+          <div class="gate-stage">
+            <div class="gate-single-leaf" id="gate-single-leaf">
+              <div class="gate-hinge top"></div>
+              <div class="gate-hinge bottom"></div>
+              <div class="gate-frame">
+                <div class="gate-bars">
+                  <div class="gate-slat"></div>
+                  <div class="gate-slat"></div>
+                  <div class="gate-slat"></div>
+                  <div class="gate-slat"></div>
+                  <div class="gate-slat"></div>
+                  <div class="gate-slat"></div>
+                </div>
+                <div class="gate-diagonal" style="left: 30%;"></div>
+                <div class="gate-diagonal" style="left: 70%;"></div>
+                <div class="gate-handle" style="right: 14px;"></div>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        // double_battant (battants doubles ouvrant vers l'intérieur)
+        gateStageContent = `
+          <div class="gate-ground-stopper"></div>
+          <div class="gate-stage">
+            <div class="gate-leaf left" id="gate-leaf-left">
+              <div class="gate-hinge top"></div>
+              <div class="gate-hinge bottom"></div>
+              <div class="gate-frame">
+                <div class="gate-bars">
+                  <div class="gate-slat"></div>
+                  <div class="gate-slat"></div>
+                  <div class="gate-slat"></div>
+                  <div class="gate-slat"></div>
+                  <div class="gate-slat"></div>
+                  <div class="gate-slat"></div>
+                </div>
+                <div class="gate-diagonal"></div>
+                <div class="gate-handle"></div>
+              </div>
+            </div>
+            <div class="gate-leaf right" id="gate-leaf-right">
+              <div class="gate-hinge top"></div>
+              <div class="gate-hinge bottom"></div>
+              <div class="gate-frame">
+                <div class="gate-bars">
+                  <div class="gate-slat"></div>
+                  <div class="gate-slat"></div>
+                  <div class="gate-slat"></div>
+                  <div class="gate-slat"></div>
+                  <div class="gate-slat"></div>
+                  <div class="gate-slat"></div>
+                </div>
+                <div class="gate-diagonal"></div>
+                <div class="gate-handle"></div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
 
       return `
         <div class="gate-grid">
@@ -1925,7 +2204,7 @@
                   <span>Contrôleur de Portail DomoLink</span>
                 </h2>
                 <div style="font-size: 13px; color: #94a3b8; margin-top: 4px;">
-                  Mode : ${gate.is_day ? "☀️ Période Jour (" + (cfg.timer_day_minutes || 10) + " min)" : "🌙 Période Nuit (" + (cfg.timer_night_minutes || 3) + " min)"}
+                  Type : ${gateType === 'coulissant' ? 'Coulissant' : (gateType === 'simple_battant' ? 'Battant Simple' : 'Battant Double')} • Mode : ${gate.is_day ? "☀️ Jour (" + (cfg.timer_day_minutes || 10) + " min)" : "🌙 Nuit (" + (cfg.timer_night_minutes || 3) + " min)"}
                 </div>
               </div>
               <div style="display: flex; align-items: center; gap: 10px;">
@@ -1952,55 +2231,36 @@
                 <div class="gate-pillar-cap"></div>
                 <div class="gate-pillar-beacon" id="beacon-right"></div>
               </div>
-              <div class="gate-ground-stopper"></div>
-              <div class="gate-stage">
-                <div class="gate-leaf left">
-                  <div class="gate-hinge top"></div>
-                  <div class="gate-hinge bottom"></div>
-                  <div class="gate-frame">
-                    <div class="gate-bars">
-                      <div class="gate-slat"></div>
-                      <div class="gate-slat"></div>
-                      <div class="gate-slat"></div>
-                      <div class="gate-slat"></div>
-                      <div class="gate-slat"></div>
-                      <div class="gate-slat"></div>
-                    </div>
-                    <div class="gate-diagonal"></div>
-                    <div class="gate-handle"></div>
+              ${gateStageContent}
+              ${isMoving ? `
+                <div class="gate-hud-progress" id="gate-hud-progress">
+                  <div class="gate-hud-progress-row">
+                    <span id="gate-hud-action-label">${state === "opening" ? "🔄 Ouverture en cours..." : "🔄 Fermeture en cours..."}</span>
+                    <span id="gate-hud-progress-text">0%</span>
+                  </div>
+                  <div class="gate-hud-progress-bar">
+                    <div class="gate-hud-progress-fill" id="gate-hud-progress-fill" style="width: 0%;"></div>
                   </div>
                 </div>
-                <div class="gate-leaf right">
-                  <div class="gate-hinge top"></div>
-                  <div class="gate-hinge bottom"></div>
-                  <div class="gate-frame">
-                    <div class="gate-bars">
-                      <div class="gate-slat"></div>
-                      <div class="gate-slat"></div>
-                      <div class="gate-slat"></div>
-                      <div class="gate-slat"></div>
-                      <div class="gate-slat"></div>
-                      <div class="gate-slat"></div>
-                    </div>
-                    <div class="gate-diagonal"></div>
-                    <div class="gate-handle"></div>
-                  </div>
-                </div>
-              </div>
+              ` : ''}
             </div>
 
             <div class="gate-countdown-wrap">
               <div class="gate-countdown-num" style="color: ${gateGlowColor};">
-                ${state === "closed" ? "00:00" : (isHoldOpen ? "PAUSE" : countdownFormatted)}
+                ${state === "closed" ? "00:00" : (isMoving ? "MANŒUVRE" : (isHoldOpen ? "PAUSE" : countdownFormatted))}
               </div>
               <div class="gate-countdown-lbl">
                 ${state === "closed" 
                   ? "Portail fermé et sécurisé" 
-                  : (isHoldOpen 
-                      ? "Maintien ouvert actif (fermeture automatique en attente)" 
-                      : (state === "obstacle" 
-                          ? `Obstacle détecté : réessai dans ${countdownFormatted}` 
-                          : `Fermeture automatique dans ${countdownFormatted}`))}
+                  : (state === "opening"
+                      ? "Course d'ouverture en cours..."
+                      : (state === "closing"
+                          ? "Course de fermeture en cours..."
+                          : (isHoldOpen 
+                              ? "Maintien ouvert actif (fermeture automatique en attente)" 
+                              : (state === "obstacle" 
+                                  ? `Obstacle détecté : réessai dans ${countdownFormatted}` 
+                                  : `Fermeture automatique dans ${countdownFormatted}`))))}
               </div>
             </div>
 
@@ -2138,6 +2398,94 @@
 
       const sceneEasterEgg = this.shadowRoot.querySelector("#gate-scene-box");
       if (sceneEasterEgg) sceneEasterEgg.addEventListener("click", triggerClick);
+
+      // 7. Lancement du moteur d'animation progressive en temps réel
+      this._startGateAnimationTicker();
+    }
+
+    _startGateAnimationTicker() {
+      if (this._gateAnimInterval) {
+        clearInterval(this._gateAnimInterval);
+        this._gateAnimInterval = null;
+      }
+
+      const gate = this._data.gate || {};
+      const cfg = gate.config || {};
+      const state = gate.state || "closed";
+      const gateType = cfg.gate_type || "coulissant";
+      const travelTime = parseInt(cfg.travel_time || "15", 10);
+      const movementStartStr = gate.movement_start;
+
+      if ((state !== "opening" && state !== "closing") || !movementStartStr) {
+        return;
+      }
+
+      const movementStartMs = new Date(movementStartStr).getTime();
+      const sr = this.shadowRoot;
+
+      const tick = () => {
+        const nowMs = Date.now();
+        const elapsedSec = (nowMs - movementStartMs) / 1000;
+        const fraction = Math.min(1.0, Math.max(0.0, elapsedSec / Math.max(1, travelTime)));
+        const progressPercent = Math.round(fraction * 100);
+        const remainingSec = Math.max(0, Math.ceil(travelTime - elapsedSec));
+
+        const hudText = sr.querySelector("#gate-hud-progress-text");
+        const hudFill = sr.querySelector("#gate-hud-progress-fill");
+        const hudAction = sr.querySelector("#gate-hud-action-label");
+        const countdownNum = sr.querySelector(".gate-countdown-num");
+        const countdownLbl = sr.querySelector(".gate-countdown-lbl");
+
+        if (hudText) {
+          hudText.textContent = `${progressPercent}% (${remainingSec}s)`;
+        }
+        if (hudFill) {
+          hudFill.style.width = `${progressPercent}%`;
+        }
+        if (hudAction) {
+          hudAction.textContent = state === "opening" ? `🔄 Ouverture en cours...` : `🔄 Fermeture en cours...`;
+        }
+        if (countdownNum) {
+          countdownNum.textContent = `00:${String(remainingSec).padStart(2, "0")}`;
+        }
+        if (countdownLbl) {
+          countdownLbl.textContent = state === "opening"
+            ? `Course d'ouverture en cours (${remainingSec}s restantes)`
+            : `Course de fermeture en cours (${remainingSec}s restantes)`;
+        }
+
+        // Animation physique progressive en direct selon le type de portail
+        if (gateType === "coulissant") {
+          const panel = sr.querySelector("#gate-active-panel");
+          if (panel) {
+            const posX = state === "opening" ? fraction * 315 : (1 - fraction) * 315;
+            panel.style.transform = `translateX(${posX}px)`;
+          }
+        } else if (gateType === "double_battant") {
+          const leafLeft = sr.querySelector("#gate-leaf-left");
+          const leafRight = sr.querySelector("#gate-leaf-right");
+          if (leafLeft && leafRight) {
+            const deg = state === "opening" ? fraction * 85 : (1 - fraction) * 85;
+            leafLeft.style.transform = `rotateY(${deg}deg)`;
+            leafRight.style.transform = `rotateY(-${deg}deg)`;
+          }
+        } else if (gateType === "simple_battant") {
+          const leaf = sr.querySelector("#gate-single-leaf");
+          if (leaf) {
+            const deg = state === "opening" ? fraction * 85 : (1 - fraction) * 85;
+            leaf.style.transform = `rotateY(${deg}deg)`;
+          }
+        }
+
+        if (fraction >= 1.0) {
+          clearInterval(this._gateAnimInterval);
+          this._gateAnimInterval = null;
+          setTimeout(() => this._fetchData(), 500);
+        }
+      };
+
+      tick();
+      this._gateAnimInterval = setInterval(tick, 100);
     }
 
     _attachSettingsEvents() {
@@ -2193,6 +2541,8 @@
       const sr = this.shadowRoot;
       const config = {
         enabled: sr.querySelector("#gate-cfg-enabled") ? sr.querySelector("#gate-cfg-enabled").checked : true,
+        gate_type: sr.querySelector("#gate-cfg-type")?.value || "coulissant",
+        travel_time: parseInt(sr.querySelector("#gate-cfg-travel-time")?.value || "15", 10),
         switch_type: sr.querySelector("#gate-cfg-switch-type")?.value || "pulse",
         switch_entity: sr.querySelector("#gate-cfg-switch-entity")?.value?.trim() || "",
         close_switch_entity: sr.querySelector("#gate-cfg-close-switch-entity")?.value?.trim() || "",
