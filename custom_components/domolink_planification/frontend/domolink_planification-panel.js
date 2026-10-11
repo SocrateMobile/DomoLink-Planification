@@ -1857,7 +1857,7 @@
 
             <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.06); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
               <div style="font-size: 13px; color: #94a3b8;">
-                DomoLink-Planification version <span style="font-weight: 700; color: #38bdf8;">v1.4.2</span> • Conçu par SocrateMobile & JFL
+                DomoLink-Planification version <span style="font-weight: 700; color: #38bdf8;">v2.0.0</span> • Conçu par SocrateMobile & JFL
               </div>
               <div style="display: flex; gap: 12px;">
                 <a href="https://github.com/SocrateMobile/DomoLink-Planification" target="_blank" style="color: #38bdf8; text-decoration: none; font-size: 13px; display: flex; align-items: center; gap: 4px;">
