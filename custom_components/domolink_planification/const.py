@@ -4,7 +4,7 @@ from typing import Any, Final
 
 DOMAIN: Final = "domolink_planification"
 NAME: Final = "DomoLink-Planification"
-VERSION: Final = "2.0.0"
+VERSION: Final = "2.0.1"
 
 # Panneau Lovelace & Frontend
 PANEL_URL_PATH: Final = "domolink-planification"
@@ -134,6 +134,11 @@ SHADING_MODE_WINTER: Final = "winter"  # Gain solaire passif
 STORAGE_KEY: Final = "domolink_planification_data"
 STORAGE_VERSION: Final = 1
 
+# Types de motorisation / architecture de portail
+GATE_TYPE_SLIDING: Final = "coulissant"          # Portail coulissant (1 vantail latéral)
+GATE_TYPE_DOUBLE_SWING: Final = "double_battant" # Portail battant double (2 vantaux)
+GATE_TYPE_SINGLE_SWING: Final = "simple_battant" # Portail battant simple (1 vantail)
+
 # --- SECTION PORTAIL & ACCÈS ---
 GATE_SWITCH_TYPE_PULSE: Final = "pulse"    # Contact sec / impulsion unique
 GATE_SWITCH_TYPE_DUAL: Final = "dual"      # Commandes séparées (Ouvrir / Fermer)
@@ -142,6 +147,8 @@ GATE_SWITCH_TYPE_TOGGLE: Final = "toggle"  # Interrupteur bistable ON/OFF
 
 DEFAULT_GATE_CONFIG: Final[dict[str, Any]] = {
     "enabled": True,
+    "gate_type": GATE_TYPE_SLIDING,
+    "travel_time": 15,
     "switch_type": GATE_SWITCH_TYPE_PULSE,
     "switch_entity": "switch.shelly_ouverture_portail_voiture",
     "close_switch_entity": "",
