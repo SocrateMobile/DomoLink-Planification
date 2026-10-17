@@ -70,8 +70,13 @@ class DomolinkPlanificationConfigFlow(ConfigFlow, domain=DOMAIN):
 class DomolinkPlanificationOptionsFlow(OptionsFlow):
     """Gestionnaire d'options pour activer/désactiver le panneau et changer le pays."""
 
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        self.config_entry = config_entry
+    def __init__(self, config_entry: ConfigEntry | None = None) -> None:
+        self._config_entry = config_entry
+
+    @property
+    def _entry(self) -> ConfigEntry:
+        """Retourne la ConfigEntry compatible HA 2024.11+ et versions antérieures."""
+        return getattr(self, "config_entry", None) or self._config_entry
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -80,7 +85,7 @@ class DomolinkPlanificationOptionsFlow(OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(title="", data=user_input)
 
-        current_options = self.config_entry.options
+        current_options = self._entry.options if self._entry else {}
         schema = vol.Schema(
             {
                 vol.Required(
@@ -98,3 +103,4 @@ class DomolinkPlanificationOptionsFlow(OptionsFlow):
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)
+

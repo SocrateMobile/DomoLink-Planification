@@ -111,13 +111,23 @@ class RecurrenceEngine:
         return RecurrenceEngine.check_date_match(sched, now)
 
     @staticmethod
-    def compute_next_run(sched: dict[str, Any], now: datetime) -> str | None:
+    def compute_next_run(
+        sched: dict[str, Any],
+        now: datetime,
+        sun_times_resolver: Any = None,
+    ) -> str | None:
         """Calcule la prochaine date/heure d'exécution (format ISO) pour une règle."""
         if not sched.get("enabled", True) or sched.get("is_completed", False):
             return None
 
-        if sched.get("time_type") in (TIME_TYPE_ZONE_ENTER, TIME_TYPE_ZONE_LEAVE):
+        time_type = sched.get("time_type", TIME_TYPE_FIXED)
+        trigger_type = sched.get("trigger_type", TRIGGER_TYPE_TIME)
+        if time_type in (TIME_TYPE_ZONE_ENTER, TIME_TYPE_ZONE_LEAVE):
             return None
+
+        is_solar = time_type in (TIME_TYPE_SUNRISE, TIME_TYPE_SUNSET) or trigger_type == TRIGGER_TYPE_SOLAR
+        solar_event = sched.get("solar_event") or ("sunrise" if time_type == TIME_TYPE_SUNRISE else "sunset")
+        offset_minutes = int(sched.get("solar_offset_minutes", 0))
 
         time_str = sched.get("time", "00:00")
         try:
@@ -125,12 +135,27 @@ class RecurrenceEngine:
         except Exception:
             h, m = 0, 0
 
+        def _get_candidate_dt(day_offset: int) -> datetime:
+            target_date_dt = now + timedelta(days=day_offset)
+            if is_solar:
+                if callable(sun_times_resolver):
+                    try:
+                        event_dt = sun_times_resolver(solar_event, target_date_dt.date())
+                        if event_dt is not None:
+                            return (event_dt + timedelta(minutes=offset_minutes)).replace(second=0, microsecond=0)
+                    except Exception:
+                        pass
+                default_h, default_m = (7, 0) if solar_event == "sunrise" else (19, 0)
+                base_dt = target_date_dt.replace(hour=default_h, minute=default_m, second=0, microsecond=0)
+                return base_dt + timedelta(minutes=offset_minutes)
+            return target_date_dt.replace(hour=h, minute=m, second=0, microsecond=0)
+
         rec_mode = sched.get("recurrence_mode", RECURRENCE_EVERY)
 
         if rec_mode in (RECURRENCE_EVERY, RECURRENCE_NEXT):
             weekdays = sched.get("weekdays") or [0, 1, 2, 3, 4, 5, 6]
             for day_offset in range(14):
-                candidate_dt = now.replace(hour=h, minute=m, second=0, microsecond=0) + timedelta(days=day_offset)
+                candidate_dt = _get_candidate_dt(day_offset)
                 if candidate_dt > now and candidate_dt.weekday() in weekdays:
                     return candidate_dt.isoformat()
             return None
@@ -143,7 +168,7 @@ class RecurrenceEngine:
             day_of_month = sched.get("day_of_month")
 
             for day_offset in range(400):
-                candidate_dt = now.replace(hour=h, minute=m, second=0, microsecond=0) + timedelta(days=day_offset)
+                candidate_dt = _get_candidate_dt(day_offset)
                 if candidate_dt <= now:
                     continue
 
@@ -166,3 +191,4 @@ class RecurrenceEngine:
             return None
 
         return None
+

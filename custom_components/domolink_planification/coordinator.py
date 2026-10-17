@@ -268,7 +268,10 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Vérifie si des règles temporelles doivent se déclencher à la minute courante."""
         schedules = self.storage.get_schedules()
         settings = self.storage.get_settings()
-        country = settings.get("country", "FR")
+        default_country = "FR"
+        if hasattr(self, "entry") and self.entry:
+            default_country = self.entry.options.get(CONF_DEFAULT_COUNTRY, self.entry.data.get(CONF_DEFAULT_COUNTRY, "FR"))
+        country = settings.get("country") or default_country
 
         for sched_id, sched in list(schedules.items()):
             if not sched.get("enabled", True) or sched.get("is_completed", False):
@@ -467,17 +470,28 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             solar_event = sched.get("solar_event") or ("sunrise" if time_type == TIME_TYPE_SUNRISE else "sunset")
             offset_minutes = int(sched.get("solar_offset_minutes", 0))
 
-            sun_state = self.hass.states.get("sun.sun")
-            if sun_state:
-                attr_key = "next_rising" if solar_event == "sunrise" else "next_setting"
-                event_iso = sun_state.attributes.get(attr_key)
-                if event_iso:
-                    try:
-                        event_dt = dt_util.parse_datetime(event_iso)
-                        if event_dt:
-                            sun_target_time = dt_util.as_local(event_dt) + timedelta(minutes=offset_minutes)
-                    except Exception:
-                        pass
+            try:
+                from homeassistant.helpers.sun import get_astral_event_date
+                from homeassistant.const import SUN_EVENT_SUNRISE, SUN_EVENT_SUNSET
+                event_name = SUN_EVENT_SUNRISE if solar_event == "sunrise" else SUN_EVENT_SUNSET
+                solar_dt = get_astral_event_date(self.hass, event_name, now.date())
+                if solar_dt:
+                    sun_target_time = dt_util.as_local(solar_dt) + timedelta(minutes=offset_minutes)
+            except Exception:
+                sun_target_time = None
+
+            if sun_target_time is None:
+                sun_state = self.hass.states.get("sun.sun")
+                if sun_state:
+                    attr_key = "next_rising" if solar_event == "sunrise" else "next_setting"
+                    event_iso = sun_state.attributes.get(attr_key)
+                    if event_iso:
+                        try:
+                            event_dt = dt_util.parse_datetime(event_iso)
+                            if event_dt:
+                                sun_target_time = dt_util.as_local(event_dt) + timedelta(minutes=offset_minutes)
+                        except Exception:
+                            pass
 
         return RecurrenceEngine.check_trigger_match(sched, now, sun_target_time)
 
@@ -657,11 +671,15 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return not standard_open if inverted else standard_open
 
     def _get_current_timer_minutes(self, cfg: dict[str, Any], now: datetime) -> int:
-        """Détermine le délai en minutes selon la plage Jour / Nuit."""
+        """Détermine le délai en minutes selon la plage Jour / Nuit (supporte le passage de minuit)."""
         current_time_str = now.strftime("%H:%M")
         day_start = cfg.get("day_start", "07:00")
         night_start = cfg.get("night_start", "22:00")
-        if day_start <= current_time_str < night_start:
+        if day_start <= night_start:
+            is_day = day_start <= current_time_str < night_start
+        else:
+            is_day = current_time_str >= day_start or current_time_str < night_start
+        if is_day:
             return int(cfg.get("timer_day_minutes", 10))
         return int(cfg.get("timer_night_minutes", 3))
 
@@ -725,7 +743,10 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         current_time_str = now.strftime("%H:%M")
         day_start = cfg.get("day_start", "07:00")
         night_start = cfg.get("night_start", "22:00")
-        is_day = day_start <= current_time_str < night_start
+        if day_start <= night_start:
+            is_day = day_start <= current_time_str < night_start
+        else:
+            is_day = current_time_str >= day_start or current_time_str < night_start
 
         return {
             "config": cfg,
@@ -789,7 +810,9 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self.data["gate"] = self.get_gate_status()
                     self.async_set_updated_data(self.data)
 
-            self.hass.async_create_task(_async_complete_opening_maneuver())
+            if getattr(self, "_gate_opening_task", None) and not self._gate_opening_task.done():
+                self._gate_opening_task.cancel()
+            self._gate_opening_task = self.hass.async_create_task(_async_complete_opening_maneuver())
 
             if cfg.get("hold_open", False):
                 await self.storage.async_add_gate_history({
