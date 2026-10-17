@@ -75,13 +75,19 @@ class SolarShadingEvaluator:
         self,
         rule_config: dict[str, Any],
         last_action_state: dict[str, Any] | None = None,
+        settings: dict[str, Any] | None = None,
+        now: Any | None = None,
     ) -> dict[str, Any]:
         """Évalue une règle de volet solaire et détermine l'action à exécuter."""
+        settings = settings or {}
         cover_id = rule_config.get("cover_entity_id")
         orientation = rule_config.get("orientation", COMPASS_S)
         facade_azimuth = resolve_azimuth(orientation)
-        temp_sensor_id = rule_config.get("temperature_sensor_id")
-        temp_threshold = float(rule_config.get("temperature_threshold", 24.0))
+        temp_sensor_id = rule_config.get("temperature_sensor_id") or settings.get("solar_weather_entity")
+        default_temp = float(settings.get("solar_target_temp", 24.0))
+        raw_thresh = rule_config.get("temperature_threshold")
+        temp_threshold = float(raw_thresh) if raw_thresh is not None and str(raw_thresh) != "" else default_temp
+        hysteresis_minutes = float(rule_config.get("hysteresis_minutes") or settings.get("solar_hysteresis") or 0.0)
         shading_pos = int(rule_config.get("shading_position", 20))
         open_pos = int(rule_config.get("open_position", 100))
         mode = rule_config.get("mode", SHADING_MODE_SUMMER)
@@ -112,7 +118,7 @@ class SolarShadingEvaluator:
             max_elevation=max_elev,
         )
 
-        # 3. Vérifier la température
+        # 3. Vérifier la température (capteur ou entité météo)
         current_temp: float | None = None
         if temp_sensor_id:
             sensor_state = self.hass.states.get(temp_sensor_id)
@@ -120,7 +126,12 @@ class SolarShadingEvaluator:
                 try:
                     current_temp = float(sensor_state.state)
                 except (ValueError, TypeError):
-                    current_temp = None
+                    temp_attr = sensor_state.attributes.get("temperature")
+                    if temp_attr is not None:
+                        try:
+                            current_temp = float(temp_attr)
+                        except (ValueError, TypeError):
+                            current_temp = None
 
         # 4. Décision selon le mode (Été / Hiver)
         target_pos: int | None = None
@@ -163,6 +174,31 @@ class SolarShadingEvaluator:
                 target_pos = shading_pos
                 reason = f"❄️ Isolation d'hiver : Absence de soleil direct ➔ Fermeture isolante à {shading_pos}%"
 
+        # 4b. Gestion de l'hystérésis anti-battement avant réouverture en mode été
+        unshaded_since = None
+        if (
+            mode == SHADING_MODE_SUMMER
+            and not should_shade
+            and last_action_state
+            and last_action_state.get("should_shade")
+            and hysteresis_minutes > 0
+            and now is not None
+        ):
+            prev_unshaded = last_action_state.get("unshaded_since")
+            if prev_unshaded is None:
+                unshaded_since = now
+                should_shade = True
+                target_pos = shading_pos
+                reason = f"⏳ Hystérésis anti-battement en cours ({int(hysteresis_minutes)} min avant réouverture)"
+            else:
+                elapsed_min = (now - prev_unshaded).total_seconds() / 60.0
+                if elapsed_min < hysteresis_minutes:
+                    unshaded_since = prev_unshaded
+                    should_shade = True
+                    target_pos = shading_pos
+                    rem_min = max(1, int(round(hysteresis_minutes - elapsed_min)))
+                    reason = f"⏳ Hystérésis anti-battement ({rem_min} min restantes avant réouverture)"
+
         # 5. Comparer avec la position actuelle du volet pour éviter les commandes inutiles
         cover_state = self.hass.states.get(cover_id) if cover_id else None
         current_cover_pos = None
@@ -193,4 +229,6 @@ class SolarShadingEvaluator:
             "current_position": current_cover_pos,
             "should_act": should_act,
             "reason": reason,
+            "unshaded_since": unshaded_since,
         }
+
