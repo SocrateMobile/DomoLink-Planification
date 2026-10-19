@@ -1,4 +1,3 @@
-from homeassistant.helpers.service import async_register_admin_service
 """Intégration DomoLink-Planification pour Home Assistant."""
 
 from __future__ import annotations
@@ -14,6 +13,7 @@ from homeassistant.components.http import HomeAssistantView
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.service import async_register_admin_service
 
 from .const import (
     CONF_ENABLE_PANEL,
