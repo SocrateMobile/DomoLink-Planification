@@ -1,3 +1,4 @@
+from homeassistant.helpers.service import async_register_admin_service
 """Intégration DomoLink-Planification pour Home Assistant."""
 
 from __future__ import annotations
@@ -104,9 +105,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 await coordinator.storage.async_save_schedule(schedule_id, sched)
                 coordinator.async_set_updated_data(await coordinator._async_update_data())
 
-    hass.helpers.service.async_register_admin_service(hass, DOMAIN, "trigger_schedule", handle_trigger)
-    hass.helpers.service.async_register_admin_service(hass, DOMAIN, "refresh_solar_shading", handle_solar_refresh)
-    hass.helpers.service.async_register_admin_service(hass, DOMAIN, "set_schedule_enabled", handle_set_enabled)
+    async_register_admin_service(hass, DOMAIN, "trigger_schedule", handle_trigger)
+    async_register_admin_service(hass, DOMAIN, "refresh_solar_shading", handle_solar_refresh)
+    async_register_admin_service(hass, DOMAIN, "set_schedule_enabled", handle_set_enabled)
 
     # 6. Écoute des modifications d'options (toggle panneau)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
