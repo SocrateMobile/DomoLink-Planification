@@ -55,7 +55,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # 1. Enregistrer les fichiers statiques frontend
     frontend_dir = os.path.join(os.path.dirname(__file__), "frontend")
-    if os.path.exists(frontend_dir):
+    if True:
         if hasattr(hass.http, "async_register_static_paths"):
             from homeassistant.components.http import StaticPathConfig
             await hass.http.async_register_static_paths([
@@ -104,9 +104,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 await coordinator.storage.async_save_schedule(schedule_id, sched)
                 coordinator.async_set_updated_data(await coordinator._async_update_data())
 
-    hass.services.async_register(DOMAIN, "trigger_schedule", handle_trigger)
-    hass.services.async_register(DOMAIN, "refresh_solar_shading", handle_solar_refresh)
-    hass.services.async_register(DOMAIN, "set_schedule_enabled", handle_set_enabled)
+    hass.helpers.service.async_register_admin_service(hass, DOMAIN, "trigger_schedule", handle_trigger)
+    hass.helpers.service.async_register_admin_service(hass, DOMAIN, "refresh_solar_shading", handle_solar_refresh)
+    hass.helpers.service.async_register_admin_service(hass, DOMAIN, "set_schedule_enabled", handle_set_enabled)
 
     # 6. Écoute des modifications d'options (toggle panneau)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
