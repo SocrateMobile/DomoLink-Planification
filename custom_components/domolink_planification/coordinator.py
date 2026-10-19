@@ -15,6 +15,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_DEFAULT_COUNTRY,
     DATE_MODE_EXACT_DAY,
     DATE_MODE_WEEKDAYS,
     DOMAIN,
@@ -28,6 +29,7 @@ from .const import (
     RECURRENCE_EVERY,
     RECURRENCE_NEXT,
     REMINDER_CHANNEL_APP,
+    TARGET_TYPE_LABEL,
     TARGET_TYPE_REMINDER,
     TIME_TYPE_FIXED,
     TIME_TYPE_SUNRISE,
