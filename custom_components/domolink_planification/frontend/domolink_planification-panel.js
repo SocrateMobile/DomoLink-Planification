@@ -3966,7 +3966,9 @@
     }
   }
 
-  customElements.define(PANEL_NAME, DomolinkPlanificationPanel);
+  if (!customElements.get(PANEL_NAME)) {
+    customElements.define(PANEL_NAME, DomolinkPlanificationPanel);
+  }
 
   // =========================================================================
   // CARTE LOVELACE PERSONNALISÉE (domolink-planification-card)
@@ -4034,14 +4036,18 @@
     }
   }
 
-  customElements.define(CARD_NAME, DomolinkPlanificationCard);
+  if (!customElements.get(CARD_NAME)) {
+    customElements.define(CARD_NAME, DomolinkPlanificationCard);
+  }
 
   window.customCards = window.customCards || [];
-  window.customCards.push({
-    type: CARD_NAME,
-    name: "DomoLink-Planification Card",
-    description: "Affichage et gestion des planifications et volets solaires DomoLink",
-  });
+  if (!window.customCards.some((c) => c.type === CARD_NAME)) {
+    window.customCards.push({
+      type: CARD_NAME,
+      name: "DomoLink-Planification Card",
+      description: "Affichage et gestion des planifications et volets solaires DomoLink",
+    });
+  }
 
   // =========================================================================
   // BADGE BLEU FRANCE DANS LA BARRE LATÉRALE (SIDEBAR)
