@@ -9,7 +9,7 @@ NAME: Final = "DomoLink-Planification"
 try:
     VERSION: Final = json.loads((pathlib.Path(__file__).parent / "manifest.json").read_text(encoding="utf-8"))["version"]
 except Exception:
-    VERSION: Final = "2.0.8"
+    VERSION: Final = "2.0.11"
 
 # Panneau Lovelace & Frontend
 PANEL_URL_PATH: Final = "domolink-planification"
@@ -151,16 +151,16 @@ GATE_SWITCH_TYPE_COVER: Final = "cover"    # Entité cover existante
 GATE_SWITCH_TYPE_TOGGLE: Final = "toggle"  # Interrupteur bistable ON/OFF
 
 DEFAULT_GATE_CONFIG: Final[dict[str, Any]] = {
-    "enabled": True,
+    "enabled": False,
     "gate_type": GATE_TYPE_SLIDING,
     "travel_time": 15,
     "switch_type": GATE_SWITCH_TYPE_PULSE,
-    "switch_entity": "switch.shelly_ouverture_portail_voiture",
+    "switch_entity": "",
     "close_switch_entity": "",
     "pedestrian_switch_entity": "",
-    "sensor_entity": "binary_sensor.etat_du_portail",
+    "sensor_entity": "",
     "sensor_inverted": False,
-    "notify_service": "notify.free_mobile_sms_enghien_enghien",
+    "notify_service": "",
     "timer_day_minutes": 10,
     "timer_night_minutes": 3,
     "day_start": "07:00",

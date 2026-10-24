@@ -12,6 +12,7 @@ from homeassistant.components import frontend
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import Unauthorized
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.service import async_register_admin_service
 
@@ -182,6 +183,10 @@ class DomolinkPlanificationApiView(HomeAssistantView):
 
     async def get(self, request: web.Request, action: str) -> web.Response:
         """Récupère l'état complet, les plannings, l'historique et les paramètres."""
+        user = request.get("hass_user")
+        if not user or not user.is_admin:
+            raise Unauthorized()
+
         if action == "data":
             data = {
                 "schedules": self.coordinator.storage.get_schedules(),
@@ -204,6 +209,10 @@ class DomolinkPlanificationApiView(HomeAssistantView):
 
     async def post(self, request: web.Request, action: str) -> web.Response:
         """Ajoute, modifie ou supprime une règle, ou déclenche une action."""
+        user = request.get("hass_user")
+        if not user or not user.is_admin:
+            raise Unauthorized()
+
         try:
             body = await request.json()
         except Exception:
