@@ -1854,7 +1854,7 @@
                 <label>Entité Dédiée à la Fermeture</label>
                 <div class="ac-wrapper" id="ac-gate-close-switch-wrapper">
                   <div class="ac-input-group">
-                    <input type="text" class="form-control" id="gate-cfg-close-switch-entity" value="${cfg.close_switch_entity || ''}" placeholder="Rechercher relais fermeture...">
+                    <input type="text" class="form-control" id="gate-cfg-close-switch-entity" value="${escapeHtml(cfg.close_switch_entity || '')}" placeholder="Rechercher relais fermeture...">
                     <div class="ac-controls">
                       <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
                       <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
@@ -1869,7 +1869,7 @@
                 <label>Entité ou Étiquette Commande Piéton (Optionnel)</label>
                 <div class="ac-wrapper" id="ac-gate-pedestrian-wrapper">
                   <div class="ac-input-group">
-                    <input type="text" class="form-control" id="gate-cfg-pedestrian-entity" value="${cfg.pedestrian_switch_entity || ''}" placeholder="Rechercher switch piéton ou étiquette...">
+                    <input type="text" class="form-control" id="gate-cfg-pedestrian-entity" value="${escapeHtml(cfg.pedestrian_switch_entity || '')}" placeholder="Rechercher switch piéton ou étiquette...">
                     <div class="ac-controls">
                       <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
                       <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
@@ -1941,37 +1941,37 @@
 
               <div class="form-group">
                 <label>Délai Journée avant Fermeture (minutes)</label>
-                <input type="number" min="1" max="120" class="form-control" id="gate-cfg-timer-day" value="${cfg.timer_day_minutes || 10}">
+                <input type="number" min="1" max="120" class="form-control" id="gate-cfg-timer-day" value="${escapeHtml(cfg.timer_day_minutes || 10)}">
               </div>
 
               <div class="form-group">
                 <label>Délai Nuit avant Fermeture (minutes)</label>
-                <input type="number" min="1" max="60" class="form-control" id="gate-cfg-timer-night" value="${cfg.timer_night_minutes || 3}">
+                <input type="number" min="1" max="60" class="form-control" id="gate-cfg-timer-night" value="${escapeHtml(cfg.timer_night_minutes || 3)}">
               </div>
 
               <div class="form-group">
                 <label>Heure Début Journée</label>
-                <input type="time" class="form-control" id="gate-cfg-day-start" value="${cfg.day_start || '07:00'}">
+                <input type="time" class="form-control" id="gate-cfg-day-start" value="${escapeHtml(cfg.day_start || '07:00')}">
               </div>
 
               <div class="form-group">
                 <label>Heure Début Nuit</label>
-                <input type="time" class="form-control" id="gate-cfg-night-start" value="${cfg.night_start || '22:00'}">
+                <input type="time" class="form-control" id="gate-cfg-night-start" value="${escapeHtml(cfg.night_start || '22:00')}">
               </div>
 
               <div class="form-group">
                 <label>Temps de Course / Vérification (sec)</label>
-                <input type="number" min="10" max="300" class="form-control" id="gate-cfg-check-delay" value="${cfg.check_delay || 60}">
+                <input type="number" min="10" max="300" class="form-control" id="gate-cfg-check-delay" value="${escapeHtml(cfg.check_delay || 60)}">
               </div>
 
               <div class="form-group">
                 <label>Tentatives Max en cas d'Obstacle</label>
-                <input type="number" min="1" max="15" class="form-control" id="gate-cfg-max-retries" value="${cfg.max_retries || 6}">
+                <input type="number" min="1" max="15" class="form-control" id="gate-cfg-max-retries" value="${escapeHtml(cfg.max_retries || 6)}">
               </div>
 
               <div class="form-group">
                 <label>Intervalle entre Réessais (minutes)</label>
-                <input type="number" min="1" max="60" class="form-control" id="gate-cfg-retry-interval" value="${cfg.retry_interval_minutes || 10}">
+                <input type="number" min="1" max="60" class="form-control" id="gate-cfg-retry-interval" value="${escapeHtml(cfg.retry_interval_minutes || 10)}">
               </div>
             </div>
 
@@ -1999,13 +1999,13 @@
 
             <div class="form-group">
               <label>Température de Confort Cible par Défaut (°C)</label>
-              <input type="number" step="0.5" min="16" max="32" class="form-control" id="settings-solar-temp" value="${settings.solar_target_temp || 24}">
+              <input type="number" step="0.5" min="16" max="32" class="form-control" id="settings-solar-temp" value="${escapeHtml(settings.solar_target_temp || 24)}">
               <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Seuil de déclenchement d'ombrage solaire d'été</div>
             </div>
 
             <div class="form-group">
               <label>Hystérésis Anti-Battement (minutes)</label>
-              <input type="number" min="5" max="60" class="form-control" id="settings-solar-hysteresis" value="${settings.solar_hysteresis || 15}">
+              <input type="number" min="5" max="60" class="form-control" id="settings-solar-hysteresis" value="${escapeHtml(settings.solar_hysteresis || 15)}">
               <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Temporisation avant réouverture après un passage nuageux</div>
             </div>
 
@@ -2013,7 +2013,7 @@
               <label>Capteur Météo / Ensoleillement Global</label>
               <div class="ac-wrapper" id="ac-settings-weather-wrapper">
                 <div class="ac-input-group">
-                  <input type="text" class="form-control" id="settings-solar-weather" value="${settings.solar_weather_entity || ''}" placeholder="weather.forecast_home ou capteur ensoleillement">
+                  <input type="text" class="form-control" id="settings-solar-weather" value="${escapeHtml(settings.solar_weather_entity || '')}" placeholder="weather.forecast_home ou capteur ensoleillement">
                   <div class="ac-controls">
                     <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
                     <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
@@ -2067,7 +2067,7 @@
               <label>Entité de Présence Globale</label>
               <div class="ac-wrapper" id="ac-settings-presence-wrapper">
                 <div class="ac-input-group">
-                  <input type="text" class="form-control" id="settings-presence-entity" value="${settings.presence_entity || ''}" placeholder="zone.home ou person.jean_frederic">
+                  <input type="text" class="form-control" id="settings-presence-entity" value="${escapeHtml(settings.presence_entity || '')}" placeholder="zone.home ou person.jean_frederic">
                   <div class="ac-controls">
                     <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
                     <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
@@ -2082,7 +2082,7 @@
               <label>Entité Centrale d'Alarme</label>
               <div class="ac-wrapper" id="ac-settings-alarm-wrapper">
                 <div class="ac-input-group">
-                  <input type="text" class="form-control" id="settings-alarm-entity" value="${settings.alarm_entity || ''}" placeholder="alarm_control_panel.votre_alarme">
+                  <input type="text" class="form-control" id="settings-alarm-entity" value="${escapeHtml(settings.alarm_entity || '')}" placeholder="alarm_control_panel.votre_alarme">
                   <div class="ac-controls">
                     <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
                     <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
@@ -3137,7 +3137,7 @@
         let html = visibleItems.map((item, idx) => {
           const isLabel = item.isLabel || (item.id && item.id.startsWith("label:"));
           const badgeClass = isLabel ? "ac-item-badge ac-badge-label" : "ac-item-badge";
-          const iconHtml = item.icon ? `<ha-icon icon="${item.icon}" style="font-size:16px; margin-right:6px; color:${item.color || '#38bdf8'};"></ha-icon>` : "";
+          const iconHtml = item.icon ? `<ha-icon icon="${escapeHtml(item.icon)}" style="font-size:16px; margin-right:6px; color:${escapeHtml(item.color || '#38bdf8')};"></ha-icon>` : "";
           const stateLabel = item.unit ? `${item.state} ${item.unit}` : (item.state || (isLabel ? "🏷️ Tag" : ""));
           return `
             <div class="ac-item" data-id="${escapeHtml(item.id)}" data-index="${idx}">
@@ -3394,7 +3394,7 @@
           
           <div class="form-group">
             <label>Nom de la règle</label>
-            <input type="text" class="form-control" id="modal-name" value="${s.name || ''}" placeholder="Ex: Volets Salon, Lumière Extérieure...">
+            <input type="text" class="form-control" id="modal-name" value="${escapeHtml(s.name || '')}" placeholder="Ex: Volets Salon, Lumière Extérieure...">
           </div>
 
           ${isSolar ? `
@@ -3457,17 +3457,17 @@
 
             <div class="form-group">
               <label>Seuil de Température déclencheur (°C)</label>
-              <input type="number" step="0.5" class="form-control" id="modal-temp-thresh" value="${s.temperature_threshold || 24}">
+              <input type="number" step="0.5" class="form-control" id="modal-temp-thresh" value="${escapeHtml(s.temperature_threshold || 24)}">
             </div>
 
             <div style="display: flex; gap: 12px;">
               <div class="form-group" style="flex:1;">
                 <label>Position Fermeture Solaire (%)</label>
-                <input type="number" min="0" max="100" class="form-control" id="modal-pos-shading" value="${s.shading_position !== undefined ? s.shading_position : 20}">
+                <input type="number" min="0" max="100" class="form-control" id="modal-pos-shading" value="${escapeHtml(s.shading_position !== undefined ? s.shading_position : 20)}">
               </div>
               <div class="form-group" style="flex:1;">
                 <label>Position Réouverture (%)</label>
-                <input type="number" min="0" max="100" class="form-control" id="modal-pos-open" value="${s.open_position !== undefined ? s.open_position : 100}">
+                <input type="number" min="0" max="100" class="form-control" id="modal-pos-open" value="${escapeHtml(s.open_position !== undefined ? s.open_position : 100)}">
               </div>
             </div>
           ` : `
@@ -3483,13 +3483,13 @@
               </div>
 
               <div id="section-fixed-time" style="${(s.time_type === 'fixed' || !s.time_type) ? '' : 'display:none;'}">
-                <input type="time" class="form-control" id="modal-time" value="${s.time || '07:30'}">
+                <input type="time" class="form-control" id="modal-time" value="${escapeHtml(s.time || '07:30')}">
               </div>
 
               <div id="section-solar-offset" style="${(s.time_type === 'sunrise' || s.time_type === 'sunset') ? '' : 'display:none;'}">
                 <div style="display:flex; align-items:center; gap: 10px;">
                   <label style="margin:0; font-size:12px; white-space:nowrap;">Décalage (minutes) :</label>
-                  <input type="number" class="form-control" id="modal-solar-offset" value="${s.solar_offset_minutes !== undefined ? s.solar_offset_minutes : 0}" step="5" style="max-width: 120px;">
+                  <input type="number" class="form-control" id="modal-solar-offset" value="${escapeHtml(s.solar_offset_minutes !== undefined ? s.solar_offset_minutes : 0)}" step="5" style="max-width: 120px;">
                   <span style="font-size:12px; color:#94a3b8;">(- avant, + après)</span>
                 </div>
               </div>
@@ -3693,7 +3693,7 @@
 
               <div class="form-group">
                 <label>Message du Rappel</label>
-                <textarea class="form-control" id="modal-reminder-msg" rows="3" placeholder="Ex: Penser à sortir les poubelles, arroser les plantes, rendez-vous...">${s.reminder_message || ''}</textarea>
+                <textarea class="form-control" id="modal-reminder-msg" rows="3" placeholder="Ex: Penser à sortir les poubelles, arroser les plantes, rendez-vous...">${escapeHtml(s.reminder_message || '')}</textarea>
               </div>
             </div>
 
