@@ -7,6 +7,16 @@
   const CARD_NAME = "domolink-planification-card";
   const PANEL_NAME = "domolink_planification-panel";
 
+  const escapeHtml = (str) => {
+    if (str === null || str === undefined) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  };
+
   const COMPASS_OPTIONS = [
     { label: "Nord (0°)", val: "N", deg: 0 },
     { label: "Nord-Nord-Est (22.5°)", val: "NNE", deg: 22.5 },
@@ -1723,14 +1733,14 @@
                   history.map(item => `
                     <tr style="border-top: 1px solid rgba(255,255,255,0.05);">
                       <td style="padding: 12px 20px; color: #94a3b8;">${new Date(item.timestamp).toLocaleString()}</td>
-                      <td style="padding: 12px 20px; font-weight: 600; color: #f8fafc;">${item.name}</td>
+                      <td style="padding: 12px 20px; font-weight: 600; color: #f8fafc;">${escapeHtml(item.name)}</td>
                       <td style="padding: 12px 20px;">
                         <span class="badge ${item.status === 'SUCCESS' ? 'badge-success' : (item.status === 'SKIPPED' ? 'badge-warning' : 'badge-info')}">
                           <ha-icon icon="${item.status === 'SUCCESS' ? 'mdi:check-circle-outline' : (item.status === 'SKIPPED' ? 'mdi:skip-next-circle-outline' : 'mdi:information-outline')}"></ha-icon>
-                          <span>${item.status}</span>
+                          <span>${escapeHtml(item.status)}</span>
                         </span>
                       </td>
-                      <td style="padding: 12px 20px; color: #cbd5e1;">${item.details || '-'}</td>
+                      <td style="padding: 12px 20px; color: #cbd5e1;">${escapeHtml(item.details || '-')}</td>
                     </tr>
                   `).join("")}
               </tbody>
@@ -1829,7 +1839,7 @@
                 <label>Entité ou Étiquette de Commande Principale (Switch, Cover, Tag)</label>
                 <div class="ac-wrapper" id="ac-gate-switch-wrapper">
                   <div class="ac-input-group">
-                    <input type="text" class="form-control" id="gate-cfg-switch-entity" value="${cfg.switch_entity || 'switch.shelly_ouverture_portail_voiture'}" placeholder="Rechercher switch, cover ou étiquette...">
+                    <input type="text" class="form-control" id="gate-cfg-switch-entity" value="${escapeHtml(cfg.switch_entity || '')}" placeholder="Rechercher switch, cover ou étiquette...">
                     <div class="ac-controls">
                       <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
                       <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
@@ -1880,7 +1890,7 @@
                 <label>Capteur d'État ou Étiquette (Ouvert / Fermé)</label>
                 <div class="ac-wrapper" id="ac-gate-sensor-wrapper">
                   <div class="ac-input-group">
-                    <input type="text" class="form-control" id="gate-cfg-sensor-entity" value="${cfg.sensor_entity || 'binary_sensor.etat_du_portail'}" placeholder="Rechercher capteur ou étiquette...">
+                    <input type="text" class="form-control" id="gate-cfg-sensor-entity" value="${escapeHtml(cfg.sensor_entity || '')}" placeholder="Rechercher capteur ou étiquette...">
                     <div class="ac-controls">
                       <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
                       <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
@@ -1906,7 +1916,7 @@
                 <label>Service / Canal de Notification</label>
                 <div class="ac-wrapper" id="ac-gate-notify-wrapper">
                   <div class="ac-input-group">
-                    <input type="text" class="form-control" id="gate-cfg-notify-service" value="${cfg.notify_service || 'notify.free_mobile_sms_enghien_enghien'}" placeholder="Rechercher service notify...">
+                    <input type="text" class="form-control" id="gate-cfg-notify-service" value="${escapeHtml(cfg.notify_service || '')}" placeholder="Rechercher service notify...">
                     <div class="ac-controls">
                       <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
                       <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
@@ -2421,8 +2431,8 @@
                 return `
                   <div class="gate-history-item">
                     <div>
-                      <div style="font-weight: 600; color: ${color};">${h.event} — ${h.status}</div>
-                      <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">${h.details || ''}</div>
+                      <div style="font-weight: 600; color: ${color};">${escapeHtml(h.event)} — ${escapeHtml(h.status)}</div>
+                      <div style="font-size: 12px; color: #94a3b8; margin-top: 2px;">${escapeHtml(h.details || '')}</div>
                     </div>
                     <div style="font-size: 11px; color: #64748b;">${dateStr}</div>
                   </div>
@@ -2864,10 +2874,10 @@
         const rawZone = zId.replace("zone.", "");
         const zName = states[zId]?.attributes?.friendly_name || (rawZone.charAt(0).toUpperCase() + rawZone.slice(1));
         triggerDesc = isEnter
-          ? `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:map-marker-radius" style="--mdc-icon-size:15px;color:#10b981;"></ha-icon> Arrivée de <strong>${pName}</strong> dans <strong>${zName}</strong></span>`
-          : `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:map-marker-minus" style="--mdc-icon-size:15px;color:#ef4444;"></ha-icon> Sortie de <strong>${pName}</strong> de <strong>${zName}</strong></span>`;
+          ? `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:map-marker-radius" style="--mdc-icon-size:15px;color:#10b981;"></ha-icon> Arrivée de <strong>${escapeHtml(pName)}</strong> dans <strong>${escapeHtml(zName)}</strong></span>`
+          : `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:map-marker-minus" style="--mdc-icon-size:15px;color:#ef4444;"></ha-icon> Sortie de <strong>${escapeHtml(pName)}</strong> de <strong>${escapeHtml(zName)}</strong></span>`;
       } else {
-        triggerDesc = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:clock-outline" style="--mdc-icon-size:15px;color:#38bdf8;"></ha-icon> Heure fixe (${sched.time || "07:30"})</span>`;
+        triggerDesc = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:clock-outline" style="--mdc-icon-size:15px;color:#38bdf8;"></ha-icon> Heure fixe (${escapeHtml(sched.time || "07:30")})</span>`;
       }
 
       // Badge de Fréquence / Périodicité
@@ -2875,18 +2885,18 @@
       const rec = sched.recurrence_mode || "every";
       if (rec === "every") {
         const days = (sched.weekdays || []).map(d => (WEEKDAYS_LABELS.find(w => w.id === d) || {}).label || d).join(", ") || "Tous les jours";
-        recurrenceBadge = `<span class="badge badge-info"><ha-icon icon="mdi:repeat"></ha-icon> <span>Tous les : ${days}</span></span>`;
+        recurrenceBadge = `<span class="badge badge-info"><ha-icon icon="mdi:repeat"></ha-icon> <span>Tous les : ${escapeHtml(days)}</span></span>`;
       } else if (rec === "next") {
         const days = (sched.weekdays || []).map(d => (WEEKDAYS_LABELS.find(w => w.id === d) || {}).label || d).join(", ") || "Prochain jour";
-        recurrenceBadge = `<span class="badge badge-warning"><ha-icon icon="mdi:fast-forward"></ha-icon> <span>Prochain : ${days}</span></span>`;
+        recurrenceBadge = `<span class="badge badge-warning"><ha-icon icon="mdi:fast-forward"></ha-icon> <span>Prochain : ${escapeHtml(days)}</span></span>`;
       } else if (rec === "date") {
         const mLabel = (MONTHS_LIST.find(m => m.val === parseInt(sched.month, 10)) || {}).label || `Mois ${sched.month}`;
         const yLabel = sched.year === "every_year" ? "Chaque année" : sched.year;
         if (sched.date_selection_type === "weekdays") {
           const days = (sched.weekdays || []).map(d => (WEEKDAYS_LABELS.find(w => w.id === d) || {}).label || d).join(", ");
-          recurrenceBadge = `<span class="badge badge-info"><ha-icon icon="mdi:calendar-month-outline"></ha-icon> <span>${mLabel} (${yLabel}) [${days}]</span></span>`;
+          recurrenceBadge = `<span class="badge badge-info"><ha-icon icon="mdi:calendar-month-outline"></ha-icon> <span>${escapeHtml(mLabel)} (${escapeHtml(yLabel)}) [${escapeHtml(days)}]</span></span>`;
         } else {
-          recurrenceBadge = `<span class="badge badge-info"><ha-icon icon="mdi:calendar-month-outline"></ha-icon> <span>Le ${sched.day_of_month || 1} ${mLabel} (${yLabel})</span></span>`;
+          recurrenceBadge = `<span class="badge badge-info"><ha-icon icon="mdi:calendar-month-outline"></ha-icon> <span>Le ${escapeHtml(sched.day_of_month || 1)} ${escapeHtml(mLabel)} (${escapeHtml(yLabel)})</span></span>`;
         }
       }
 
@@ -2894,17 +2904,17 @@
       let targetDesc = "";
       if (sched.target_type === "reminder") {
         const ch = (REMINDER_CHANNELS.find(c => c.id === sched.reminder_channel) || {}).label || sched.reminder_channel || "Notification";
-        targetDesc = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:bell-ring-outline" style="--mdc-icon-size:15px;color:#a855f7;"></ha-icon> <strong>Rappel [${ch}]</strong> : <span style="color:#e2e8f0;">"${sched.reminder_message || ''}"</span></span>`;
+        targetDesc = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:bell-ring-outline" style="--mdc-icon-size:15px;color:#a855f7;"></ha-icon> <strong>Rappel [${escapeHtml(ch)}]</strong> : <span style="color:#e2e8f0;">"${escapeHtml(sched.reminder_message || '')}"</span></span>`;
       } else {
-        targetDesc = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:lightning-bolt-outline" style="--mdc-icon-size:15px;color:#38bdf8;"></ha-icon> ${sched.target_type} ➔ <code>${sched.target_value}</code> (${sched.action_service || 'turn_on'})</span>`;
+        targetDesc = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:lightning-bolt-outline" style="--mdc-icon-size:15px;color:#38bdf8;"></ha-icon> ${escapeHtml(sched.target_type)} ➔ <code>${escapeHtml(sched.target_value)}</code> (${escapeHtml(sched.action_service || 'turn_on')})</span>`;
       }
 
       return `
-        <div class="card" data-id="${sched.id}" style="${isCompleted ? 'opacity: 0.65;' : ''}">
+        <div class="card" data-id="${escapeHtml(sched.id)}" style="${isCompleted ? 'opacity: 0.65;' : ''}">
           <div>
             <div class="card-header">
               <div>
-                <h3 class="card-title">${sched.name}</h3>
+                <h3 class="card-title">${escapeHtml(sched.name)}</h3>
                 <div style="margin-top: 6px; display:flex; gap:6px; flex-wrap:wrap;">
                   ${recurrenceBadge}
                   ${isCompleted ? '<span class="badge badge-disabled">Terminé</span>' : ''}
@@ -2943,11 +2953,11 @@
         `<span class="badge badge-success"><ha-icon icon="mdi:weather-partly-cloudy"></ha-icon> <span>Ouvert (${sched.open_position}%)</span></span>`;
 
       return `
-        <div class="card" data-id="${sched.id}">
+        <div class="card" data-id="${escapeHtml(sched.id)}">
           <div>
             <div class="card-header">
               <div>
-                <h3 class="card-title">${sched.name}</h3>
+                <h3 class="card-title">${escapeHtml(sched.name)}</h3>
                 <div style="margin-top: 6px;">${statusBadge}</div>
               </div>
               <label class="switch">
@@ -2956,11 +2966,11 @@
               </label>
             </div>
             <div class="card-details">
-              <div><span class="label">Volet :</span> <code>${sched.cover_entity_id}</code></div>
-              <div><span class="label">Exposition Façade :</span> <strong>${sched.orientation} (${state.facade_azimuth || '-'}°)</strong></div>
-              <div><span class="label">Incidence Solaire :</span> ${state.incidence_angle !== undefined ? `${state.incidence_angle}°` : '-'}</div>
-              <div><span class="label">Seuil Température :</span> ${sched.temperature_threshold}°C (Actuel: ${state.current_temp !== null && state.current_temp !== undefined ? `${state.current_temp}°C` : 'N/A'})</div>
-              <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">${state.reason || ''}</div>
+              <div><span class="label">Volet :</span> <code>${escapeHtml(sched.cover_entity_id)}</code></div>
+              <div><span class="label">Exposition Façade :</span> <strong>${escapeHtml(sched.orientation)} (${escapeHtml(state.facade_azimuth || '-')}°)</strong></div>
+              <div><span class="label">Incidence Solaire :</span> ${state.incidence_angle !== undefined ? `${escapeHtml(state.incidence_angle)}°` : '-'}</div>
+              <div><span class="label">Seuil Température :</span> ${escapeHtml(sched.temperature_threshold)}°C (Actuel: ${state.current_temp !== null && state.current_temp !== undefined ? `${escapeHtml(state.current_temp)}°C` : 'N/A'})</div>
+              <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">${escapeHtml(state.reason || '')}</div>
             </div>
           </div>
           <div class="card-actions">
@@ -3045,13 +3055,6 @@
           .normalize("NFD")
           .replace(/[\u0300-\u036f]/g, "")
           .toLowerCase();
-      };
-
-      const escapeHtml = (str) => {
-        return (str || "")
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;");
       };
 
       const highlightMatches = (text, query) => {
@@ -3404,7 +3407,7 @@
                 <div class="ac-input-group">
                   <input type="text" class="form-control ac-input" id="modal-cover-id" 
                          placeholder="Tapez pour filtrer (ex: salon, rideau, volet)..." 
-                         value="${s.cover_entity_id || ''}" autocomplete="off">
+                         value="${escapeHtml(s.cover_entity_id || '')}" autocomplete="off">
                   <div class="ac-controls">
                     <button type="button" class="ac-btn ac-clear-btn" title="Effacer la saisie">✕</button>
                     <button type="button" class="ac-btn ac-toggle-btn" title="Afficher tous les volets">▼</button>
@@ -3414,8 +3417,8 @@
               </div>
               <div class="ac-selection-hint" id="ac-cover-hint" style="${s.cover_entity_id ? '' : 'display:none;'}">
                 ${s.cover_entity_id && states[s.cover_entity_id] ? `
-                  Sélectionné : <strong>${states[s.cover_entity_id].attributes?.friendly_name || s.cover_entity_id}</strong>
-                  ${states[s.cover_entity_id].attributes?.current_position !== undefined ? `(${states[s.cover_entity_id].attributes.current_position}%)` : `(${states[s.cover_entity_id].state})`}
+                  Sélectionné : <strong>${escapeHtml(states[s.cover_entity_id].attributes?.friendly_name || s.cover_entity_id)}</strong>
+                  ${states[s.cover_entity_id].attributes?.current_position !== undefined ? `(${escapeHtml(states[s.cover_entity_id].attributes.current_position)}%)` : `(${escapeHtml(states[s.cover_entity_id].state)})`}
                 ` : ''}
               </div>
             </div>
@@ -3436,7 +3439,7 @@
                 <div class="ac-input-group">
                   <input type="text" class="form-control ac-input" id="modal-temp-sensor" 
                          placeholder="Tapez pour filtrer (ex: salon, sonde, ext)..." 
-                         value="${s.temperature_sensor_id || ''}" autocomplete="off">
+                         value="${escapeHtml(s.temperature_sensor_id || '')}" autocomplete="off">
                   <div class="ac-controls">
                     <button type="button" class="ac-btn ac-clear-btn" title="Effacer la saisie">✕</button>
                     <button type="button" class="ac-btn ac-toggle-btn" title="Afficher tous les capteurs">▼</button>
@@ -3446,8 +3449,8 @@
               </div>
               <div class="ac-selection-hint" id="ac-temp-hint" style="${s.temperature_sensor_id ? '' : 'display:none;'}">
                 ${s.temperature_sensor_id && states[s.temperature_sensor_id] ? `
-                  Sélectionné : <strong>${states[s.temperature_sensor_id].attributes?.friendly_name || s.temperature_sensor_id}</strong>
-                  (${states[s.temperature_sensor_id].state} ${states[s.temperature_sensor_id].attributes?.unit_of_measurement || '°C'})
+                  Sélectionné : <strong>${escapeHtml(states[s.temperature_sensor_id].attributes?.friendly_name || s.temperature_sensor_id)}</strong>
+                  (${escapeHtml(states[s.temperature_sensor_id].state)} ${escapeHtml(states[s.temperature_sensor_id].attributes?.unit_of_measurement || '°C')})
                 ` : ''}
               </div>
             </div>
@@ -3502,7 +3505,7 @@
                       <div class="ac-input-group">
                         <input type="text" class="form-control ac-input" id="modal-zone-person" 
                                placeholder="👤 Toute personne ou nom..." 
-                               value="${s.zone_person_id || 'any'}" autocomplete="off">
+                               value="${escapeHtml(s.zone_person_id || 'any')}" autocomplete="off">
                         <div class="ac-controls">
                           <button type="button" class="ac-btn ac-clear-btn" title="Effacer la saisie">✕</button>
                           <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste">▼</button>
@@ -3511,7 +3514,7 @@
                       <div class="ac-dropdown" id="ac-person-dropdown"></div>
                     </div>
                     <div class="ac-selection-hint" id="ac-person-hint">
-                      Sélectionné : <strong>${(s.zone_person_id === 'any' || !s.zone_person_id) ? '👤 Toute personne / N\'importe qui' : (states[s.zone_person_id]?.attributes?.friendly_name || s.zone_person_id)}</strong>
+                      Sélectionné : <strong>${(s.zone_person_id === 'any' || !s.zone_person_id) ? '👤 Toute personne / N\'importe qui' : escapeHtml(states[s.zone_person_id]?.attributes?.friendly_name || s.zone_person_id)}</strong>
                     </div>
                   </div>
                   <div style="flex:1;">
@@ -3523,7 +3526,7 @@
                       <div class="ac-input-group">
                         <input type="text" class="form-control ac-input" id="modal-zone-id" 
                                placeholder="📍 Zone (ex: zone.home)..." 
-                               value="${s.zone_id || 'zone.home'}" autocomplete="off">
+                               value="${escapeHtml(s.zone_id || 'zone.home')}" autocomplete="off">
                         <div class="ac-controls">
                           <button type="button" class="ac-btn ac-clear-btn" title="Effacer la saisie">✕</button>
                           <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste">▼</button>
@@ -3532,7 +3535,7 @@
                       <div class="ac-dropdown" id="ac-zone-dropdown"></div>
                     </div>
                     <div class="ac-selection-hint" id="ac-zone-hint">
-                      Sélectionné : <strong>${states[s.zone_id || 'zone.home']?.attributes?.friendly_name || s.zone_id || 'Maison (zone.home)'}</strong>
+                      Sélectionné : <strong>${escapeHtml(states[s.zone_id || 'zone.home']?.attributes?.friendly_name || s.zone_id || 'Maison (zone.home)')}</strong>
                     </div>
                   </div>
                 </div>
@@ -3651,7 +3654,7 @@
                   <div class="ac-input-group">
                     <input type="text" class="form-control ac-input" id="modal-target-val" 
                            placeholder="Saisissez ou recherchez la cible..." 
-                           value="${s.target_type !== 'reminder' ? (s.target_value || '') : ''}" autocomplete="off">
+                           value="${escapeHtml(s.target_type !== 'reminder' ? (s.target_value || '') : '')}" autocomplete="off">
                     <div class="ac-controls">
                       <button type="button" class="ac-btn ac-clear-btn" title="Effacer la saisie">✕</button>
                       <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste">▼</button>
@@ -3661,7 +3664,7 @@
                 </div>
                 <div class="ac-selection-hint" id="ac-target-hint" style="${s.target_value && s.target_type !== 'reminder' ? '' : 'display:none;'}">
                   ${s.target_value && states[s.target_value] ? `
-                    Sélectionné : <strong>${states[s.target_value].attributes?.friendly_name || s.target_value}</strong>
+                    Sélectionné : <strong>${escapeHtml(states[s.target_value].attributes?.friendly_name || s.target_value)}</strong>
                   ` : ''}
                 </div>
               </div>
@@ -4025,7 +4028,7 @@
         <ha-card>
           <div class="title">
             <ha-icon icon="mdi:calendar-clock" style="--mdc-icon-size:22px; color:#38bdf8;"></ha-icon>
-            <span>${this._config.title || "DomoLink-Planification"}</span>
+            <span>${escapeHtml(this._config.title || "DomoLink-Planification")}</span>
           </div>
           <p style="margin:0; font-size: 13px; color: #94a3b8;">
             Moteur d'automatisation & suivi solaire actif.

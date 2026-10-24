@@ -1,7 +1,7 @@
 # <p align="center"><img src="images/icon@2x.png" alt="DomoLink-Planification Logo" width="120"><br>🗓️ DomoLink-Planification</p>
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/default)
-[![version](https://img.shields.io/badge/version-v2.0.10-blue.svg)](https://github.com/SocrateMobile/DomoLink-Planification/releases)
+[![version](https://img.shields.io/badge/version-v2.0.11-blue.svg)](https://github.com/SocrateMobile/DomoLink-Planification/releases)
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.4+-41BDF5.svg)](https://www.home-assistant.io)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Socrate-FFDD00?logo=buy-me-a-coffee&logoColor=000000)](https://buymeacoffee.com/Socrate)
@@ -79,11 +79,10 @@ Moteur autonome (sans API tierce) pour :
 ## 🚀 Installation
 
 ### Via HACS (Recommandé)
-1. Ouvrez HACS ➔ **Intégrations** ➔ Cliquez sur les trois petits points en haut à droite ➔ **Dépôts personnalisés**.
-2. Ajoutez l'URL : `https://github.com/SocrateMobile/DomoLink-Planification`
-3. Catégorie : **Intégration**.
-4. Cliquez sur **Télécharger**, puis redémarrez Home Assistant.
-5. Allez dans **Paramètres ➔ Appareils et services ➔ Ajouter une intégration ➔ DomoLink-Planification**.
+1. Ouvrez **HACS** dans votre barre latérale Home Assistant.
+2. Recherchez **DomoLink-Planification** dans la section Intégrations.
+3. Cliquez sur **Télécharger**, puis redémarrez Home Assistant si demandé.
+4. Allez dans **Paramètres ➔ Appareils et services ➔ Ajouter une intégration ➔ DomoLink-Planification**.
 
 ---
 
