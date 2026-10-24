@@ -1821,7 +1821,7 @@
 
               <div class="form-group">
                 <label>Durée de Course / Manœuvre (secondes)</label>
-                <input type="number" min="3" max="120" step="1" class="form-control" id="gate-cfg-travel-time" value="${cfg.travel_time || 15}">
+                <input type="number" min="3" max="120" step="1" class="form-control" id="gate-cfg-travel-time" value="${escapeHtml(String(cfg.travel_time ?? 15))}">
                 <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Temps réel pour l'animation progressive d'ouverture/fermeture (ex: 15s)</div>
               </div>
 
@@ -1883,7 +1883,7 @@
 
               <div class="form-group">
                 <label>Durée de l'Impulsion (secondes)</label>
-                <input type="number" step="0.5" min="0.5" max="10" class="form-control" id="gate-cfg-pulse-duration" value="${cfg.pulse_duration || 1.0}">
+                <input type="number" step="0.5" min="0.5" max="10" class="form-control" id="gate-cfg-pulse-duration" value="${escapeHtml(String(cfg.pulse_duration ?? 1.0))}">
               </div>
 
               <div class="form-group">
@@ -2298,7 +2298,7 @@
                   <span>Contrôleur de Portail DomoLink</span>
                 </h2>
                 <div style="font-size: 13px; color: #94a3b8; margin-top: 4px;">
-                  Type : ${gateType === 'coulissant' ? 'Coulissant' : (gateType === 'simple_battant' ? 'Battant Simple' : 'Battant Double')} • Mode : ${gate.is_day ? "☀️ Jour (" + (cfg.timer_day_minutes || 10) + " min)" : "🌙 Nuit (" + (cfg.timer_night_minutes || 3) + " min)"}
+                  Type : ${gateType === 'coulissant' ? 'Coulissant' : (gateType === 'simple_battant' ? 'Battant Simple' : 'Battant Double')} • Mode : ${gate.is_day ? "☀️ Jour (" + escapeHtml(String(cfg.timer_day_minutes || 10)) + " min)" : "🌙 Nuit (" + escapeHtml(String(cfg.timer_night_minutes || 3)) + " min)"}
                 </div>
               </div>
               <div style="display: flex; align-items: center; gap: 10px;">
@@ -2861,10 +2861,10 @@
       let triggerDesc = "";
       if (sched.time_type === "sunrise") {
         const off = sched.solar_offset_minutes || 0;
-        triggerDesc = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:weather-sunset-up" style="--mdc-icon-size:15px;color:#f59e0b;"></ha-icon> Lever du soleil (${off >= 0 ? "+" : ""}${off} min)</span>`;
+        triggerDesc = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:weather-sunset-up" style="--mdc-icon-size:15px;color:#f59e0b;"></ha-icon> Lever du soleil (${off >= 0 ? "+" : ""}${escapeHtml(String(off))} min)</span>`;
       } else if (sched.time_type === "sunset") {
         const off = sched.solar_offset_minutes || 0;
-        triggerDesc = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:weather-sunset-down" style="--mdc-icon-size:15px;color:#f97316;"></ha-icon> Coucher du soleil (${off >= 0 ? "+" : ""}${off} min)</span>`;
+        triggerDesc = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:weather-sunset-down" style="--mdc-icon-size:15px;color:#f97316;"></ha-icon> Coucher du soleil (${off >= 0 ? "+" : ""}${escapeHtml(String(off))} min)</span>`;
       } else if (sched.time_type === "zone_enter" || sched.time_type === "zone_leave") {
         const states = (this._hass && this._hass.states) ? this._hass.states : {};
         const isEnter = sched.time_type === "zone_enter";
@@ -2890,7 +2890,7 @@
         const days = (sched.weekdays || []).map(d => (WEEKDAYS_LABELS.find(w => w.id === d) || {}).label || d).join(", ") || "Prochain jour";
         recurrenceBadge = `<span class="badge badge-warning"><ha-icon icon="mdi:fast-forward"></ha-icon> <span>Prochain : ${escapeHtml(days)}</span></span>`;
       } else if (rec === "date") {
-        const mLabel = (MONTHS_LIST.find(m => m.val === parseInt(sched.month, 10)) || {}).label || `Mois ${sched.month}`;
+        const mLabel = (MONTHS_LIST.find(m => m.val === parseInt(sched.month, 10)) || {}).label || ('Mois ' + escapeHtml(String(sched.month || '')));
         const yLabel = sched.year === "every_year" ? "Chaque année" : sched.year;
         if (sched.date_selection_type === "weekdays") {
           const days = (sched.weekdays || []).map(d => (WEEKDAYS_LABELS.find(w => w.id === d) || {}).label || d).join(", ");
@@ -2933,7 +2933,7 @@
                 <strong style="color:#60a5fa;">${isCompleted ? 'Exécution unique terminée' : nextRunFormatted}</strong>
                 ${!isCompleted && countdown ? `<span class="countdown-badge"><ha-icon icon="mdi:timer-sand"></ha-icon> ${countdown}</span>` : ''}
               </div>
-              <div><span class="label">Jours Fériés :</span> ${sched.holiday_mode || 'Actif'}</div>
+              <div><span class="label">Jours Fériés :</span> ${escapeHtml(sched.holiday_mode || 'Actif')}</div>
             </div>
           </div>
           <div class="card-actions">
@@ -2949,8 +2949,8 @@
       const isEnabled = sched.enabled !== false;
       const state = (this._data.solar_states || {})[sched.id] || {};
       const statusBadge = state.should_shade ? 
-        `<span class="badge badge-warning"><ha-icon icon="mdi:weather-sunny"></ha-icon> <span>Fermé Solaire (${sched.shading_position}%)</span></span>` :
-        `<span class="badge badge-success"><ha-icon icon="mdi:weather-partly-cloudy"></ha-icon> <span>Ouvert (${sched.open_position}%)</span></span>`;
+        `<span class="badge badge-warning"><ha-icon icon="mdi:weather-sunny"></ha-icon> <span>Fermé Solaire (${escapeHtml(String(sched.shading_position))}%)</span></span>` :
+        `<span class="badge badge-success"><ha-icon icon="mdi:weather-partly-cloudy"></ha-icon> <span>Ouvert (${escapeHtml(String(sched.open_position))}%)</span></span>`;
 
       return `
         <div class="card" data-id="${escapeHtml(sched.id)}">
