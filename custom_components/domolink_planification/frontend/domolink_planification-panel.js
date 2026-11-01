@@ -1523,6 +1523,7 @@
       const schedulesList = Object.values(this._data.schedules || {});
       const timeSchedules = schedulesList.filter(s => s.trigger_type !== "solar_shading");
       const solarSchedules = schedulesList.filter(s => s.trigger_type === "solar_shading");
+      const automationsList = Object.values(this._data.automations || {});
 
       this.shadowRoot.innerHTML = `
         <style>${STYLES}</style>
@@ -1542,6 +1543,7 @@
             <button class="btn btn-clipboard" id="btn-copy-card"><ha-icon icon="mdi:content-copy"></ha-icon> <span>Carte Lovelace</span></button>
             <button class="btn btn-primary" id="btn-add-schedule"><ha-icon icon="mdi:plus-circle-outline"></ha-icon> <span>Planification</span></button>
             <button class="btn btn-primary" id="btn-add-solar"><ha-icon icon="mdi:weather-sunny-alert"></ha-icon> <span>Volet Solaire</span></button>
+            <button class="btn btn-primary" id="btn-add-auto" style="background: linear-gradient(135deg, #6366f1, #4f46e5);"><ha-icon icon="mdi:lightning-bolt"></ha-icon> <span>Automatisation</span></button>
           </div>
         </div>
 
@@ -1553,6 +1555,10 @@
           <div class="tab ${this._activeTab === 'solar' ? 'active' : ''}" data-tab="solar">
             <ha-icon icon="mdi:weather-sunny"></ha-icon>
             <span>Volets Solaires (${solarSchedules.length})</span>
+          </div>
+          <div class="tab ${this._activeTab === 'automations' ? 'active' : ''}" data-tab="automations">
+            <ha-icon icon="mdi:lightning-bolt"></ha-icon>
+            <span>Automatisations (${automationsList.length})</span>
           </div>
           <div class="tab ${this._activeTab === 'gate' ? 'active' : ''}" data-tab="gate">
             <ha-icon icon="mdi:gate"></ha-icon>
@@ -1569,7 +1575,7 @@
         </div>
 
         <div id="tab-content">
-          ${this._renderActiveTabContent(timeSchedules, solarSchedules, sunAzimuth, sunElevation)}
+          ${this._renderActiveTabContent(timeSchedules, solarSchedules, automationsList, sunAzimuth, sunElevation)}
         </div>
 
         <div class="toast" id="toast"></div>
@@ -1584,6 +1590,10 @@
 
       const btnAddSolar = this.shadowRoot.querySelector("#btn-add-solar");
       if (btnAddSolar) btnAddSolar.addEventListener("click", () => this._openScheduleModal(null, true));
+
+      const btnAddAuto = this.shadowRoot.querySelector("#btn-add-auto");
+      if (btnAddAuto) btnAddAuto.addEventListener("click", () => this._openAutomationModal());
+
 
       // Event Listeners sur les onglets
       this.shadowRoot.querySelectorAll(".tab").forEach(el => {
@@ -1608,6 +1618,62 @@
       if (solarEmptyAddBtn) {
         solarEmptyAddBtn.addEventListener("click", () => this._openScheduleModal(null, true));
       }
+
+      const autoEmptyAddBtn = this.shadowRoot.querySelector("#btn-auto-empty-add");
+      if (autoEmptyAddBtn) {
+        autoEmptyAddBtn.addEventListener("click", () => this._openAutomationModal());
+      }
+
+      const btnNewAuto = this.shadowRoot.querySelector("#btn-new-auto");
+      if (btnNewAuto) {
+        btnNewAuto.addEventListener("click", () => this._openAutomationModal());
+      }
+
+      // Toggles switch sur les cartes d'automatisations
+      this.shadowRoot.querySelectorAll(".toggle-auto").forEach(toggle => {
+        toggle.addEventListener("change", (e) => {
+          const card = e.currentTarget.closest(".card");
+          if (card) {
+            this._toggleAutomation(card.dataset.id, e.currentTarget.checked);
+          }
+        });
+      });
+
+      // Boutons d'action sur les automatisations
+      this.shadowRoot.querySelectorAll(".trigger-auto-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const card = e.currentTarget.closest(".card");
+          if (card) this._triggerAutomationNow(card.dataset.id);
+        });
+      });
+
+      this.shadowRoot.querySelectorAll(".dryrun-auto-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const card = e.currentTarget.closest(".card");
+          if (card) {
+            const auto = (this._data.automations || {})[card.dataset.id];
+            if (auto) this._dryRunConditions(auto);
+          }
+        });
+      });
+
+      this.shadowRoot.querySelectorAll(".edit-auto-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const card = e.currentTarget.closest(".card");
+          if (card) {
+            const auto = (this._data.automations || {})[card.dataset.id];
+            if (auto) this._openAutomationModal(auto);
+          }
+        });
+      });
+
+      this.shadowRoot.querySelectorAll(".delete-auto-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const card = e.currentTarget.closest(".card");
+          if (card) this._deleteAutomation(card.dataset.id);
+        });
+      });
+
 
       // 2. Toggles switch sur les cartes
       this.shadowRoot.querySelectorAll(".toggle-schedule").forEach(toggle => {
@@ -1656,10 +1722,15 @@
       }
     }
 
-    _renderActiveTabContent(timeSchedules, solarSchedules, sunAzimuth, sunElevation) {
+    _renderActiveTabContent(timeSchedules, solarSchedules, automationsList, sunAzimuth, sunElevation) {
       if (this._activeTab === "gate") {
         return this._renderGateTabContent();
       }
+
+      if (this._activeTab === "automations") {
+        return this._renderAutomationsTabContent(automationsList);
+      }
+
 
       if (this._activeTab === "schedules") {
         if (timeSchedules.length === 0) {
@@ -2981,6 +3052,461 @@
         </div>
       `;
     }
+
+    _renderAutomationsTabContent(automationsList) {
+      if (automationsList.length === 0) {
+        return `
+          <div style="text-align: center; padding: 60px 24px; background: rgba(30,41,59,0.4); border-radius: 16px; border: 1px dashed rgba(99,102,241,0.35);">
+            <div class="header-icon" style="margin: 0 auto 16px auto; width: 64px; height: 64px; background: linear-gradient(135deg, #6366f1, #4f46e5);">
+              <ha-icon icon="mdi:lightning-bolt" style="--mdc-icon-size:36px; color:#fff;"></ha-icon>
+            </div>
+            <p style="font-size: 18px; color: #f1f5f9; font-weight: 600; margin: 0 0 8px 0;">Aucune automatisation active.</p>
+            <p style="font-size: 13px; color: #94a3b8; margin: 0 0 20px 0;">Créez votre première automatisation pour réagir instantanément à un bouton Zigbee (télécommande portail, Xiaomi/Aqara...), un capteur ou un relais avec anti-rebond matériel.</p>
+            <button class="btn btn-primary" id="btn-auto-empty-add" style="font-size: 15px; padding: 12px 24px; background: linear-gradient(135deg, #6366f1, #4f46e5);">
+              <ha-icon icon="mdi:plus-circle-outline"></ha-icon> <span>Créer une automatisation</span>
+            </button>
+          </div>
+        `;
+      }
+
+      return `
+        <div style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h2 style="margin:0; font-size: 20px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px;">
+              <ha-icon icon="mdi:lightning-bolt" style="color:#6366f1;"></ha-icon>
+              <span>Automatisations & Déclencheurs Rapides</span>
+            </h2>
+            <p style="margin:4px 0 0 0; font-size:13px; color:#94a3b8;">
+              Gestion ultra-réactive des télécommandes Zigbee, anti-rebond matériel, filtres calendaires et contrôle direct.
+            </p>
+          </div>
+          <div>
+            <button class="btn btn-primary" id="btn-new-auto" style="background: linear-gradient(135deg, #6366f1, #4f46e5);">
+              <ha-icon icon="mdi:plus-circle-outline"></ha-icon> <span>Nouvelle Automatisation</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="grid">
+          ${automationsList.map(auto => this._renderAutomationCard(auto)).join("")}
+        </div>
+      `;
+    }
+
+    _renderAutomationCard(auto) {
+      const isEnabled = auto.enabled !== false;
+      const mode = auto.mode || "single";
+      const debounce = auto.debounce_ms !== undefined ? auto.debounce_ms : 1000;
+      const triggers = auto.triggers || [];
+      const tr0 = triggers[0] || {};
+      
+      let triggerHtml = "";
+      if (tr0.type === "button") {
+        const actionLabel = tr0.action === "single" ? "Appui simple" : (tr0.action === "double" ? "Double clic" : (tr0.action === "hold" ? "Appui long" : "N'importe quel appui"));
+        triggerHtml = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:radiobox-marked" style="--mdc-icon-size:15px;color:#38bdf8;"></ha-icon> <strong>Bouton Zigbee</strong> : <code>${escapeHtml(tr0.device_id || 'Tous')}</code> (${actionLabel})</span>`;
+      } else if (tr0.type === "state") {
+        triggerHtml = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:toggle-switch" style="--mdc-icon-size:15px;color:#10b981;"></ha-icon> État : <code>${escapeHtml(tr0.entity_id || '')}</code></span>`;
+      } else if (tr0.type === "numeric_state") {
+        triggerHtml = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:gauge" style="--mdc-icon-size:15px;color:#f59e0b;"></ha-icon> Seuil numérique : <code>${escapeHtml(tr0.entity_id || '')}</code></span>`;
+      } else {
+        triggerHtml = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:lightning-bolt" style="--mdc-icon-size:15px;color:#a855f7;"></ha-icon> Événement : ${escapeHtml(tr0.event_type || 'custom')}</span>`;
+      }
+
+      const conditions = auto.conditions || [];
+      let condHtml = "";
+      if (conditions.length === 0) {
+        condHtml = `<span style="color:#64748b; font-size:12px;">Aucune condition (toujours exécuté)</span>`;
+      } else {
+        condHtml = `<span style="display:inline-flex;align-items:center;gap:4px;color:#cbd5e1;font-size:12px;"><ha-icon icon="mdi:filter-check-outline" style="--mdc-icon-size:14px;color:#a78bfa;"></ha-icon> ${conditions.length} condition(s) (${auto.condition_mode === 'or' ? 'OU' : 'ET'})</span>`;
+      }
+
+      const actions = auto.actions || [];
+      const act0 = actions[0] || {};
+      let actDesc = "";
+      if (act0.type === "delay") {
+        actDesc = `Temporisation ${act0.duration || 1}s`;
+      } else {
+        const actName = act0.action || act0.service || "Commande";
+        const tgt = act0.target ? (act0.target.device_id || act0.target.entity_id || "") : (act0.target_value || "");
+        actDesc = `⚡ ${escapeHtml(actName)} ➔ <code>${escapeHtml(tgt)}</code>`;
+      }
+
+      const lastTriggered = auto.last_triggered ? new Date(auto.last_triggered).toLocaleString("fr-FR") : "Jamais";
+
+      return `
+        <div class="card" data-id="${escapeHtml(auto.id)}">
+          <div>
+            <div class="card-header">
+              <div>
+                <h3 class="card-title">${escapeHtml(auto.name || "Automatisation")}</h3>
+                <div style="margin-top: 6px; display:flex; gap:6px; flex-wrap:wrap;">
+                  <span class="badge badge-info"><ha-icon icon="mdi:shield-refresh"></ha-icon> <span>Anti-rebond: ${debounce}ms</span></span>
+                  <span class="badge badge-warning"><ha-icon icon="mdi:sync"></ha-icon> <span>Mode: ${escapeHtml(mode)}</span></span>
+                </div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" class="toggle-auto" ${isEnabled ? "checked" : ""}>
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div class="card-details">
+              <div><span class="label">Déclencheur :</span> ${triggerHtml}</div>
+              <div><span class="label">Conditions :</span> ${condHtml}</div>
+              <div><span class="label">Action :</span> ${actDesc}</div>
+              <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">
+                Dernière exécution : ${lastTriggered} (${auto.trigger_count || 0} déclenchements)
+              </div>
+            </div>
+          </div>
+
+          <div class="card-actions">
+            <button class="btn-icon trigger-auto-btn" title="Exécuter maintenant"><ha-icon icon="mdi:play"></ha-icon></button>
+            <button class="btn-icon dryrun-auto-btn" title="Tester les conditions en direct"><ha-icon icon="mdi:flask-outline"></ha-icon></button>
+            <button class="btn-icon edit-auto-btn" title="Modifier"><ha-icon icon="mdi:pencil-outline"></ha-icon></button>
+            <button class="btn-icon delete delete-auto-btn" title="Supprimer"><ha-icon icon="mdi:trash-can-outline"></ha-icon></button>
+          </div>
+        </div>
+      `;
+    }
+
+    async _toggleAutomation(autoId, enabled) {
+      if (!this._hass) return;
+      await this._hass.fetchWithAuth("/api/domolink_planification/set_automation_enabled", {
+        method: "POST",
+        body: JSON.stringify({ id: autoId, enabled }),
+      });
+      await this._fetchData();
+      this._showToast(enabled ? "⚡ Automatisation activée" : "⏸️ Automatisation suspendue");
+    }
+
+    async _triggerAutomationNow(autoId) {
+      if (!this._hass) return;
+      const res = await this._hass.fetchWithAuth("/api/domolink_planification/trigger_automation", {
+        method: "POST",
+        body: JSON.stringify({ id: autoId }),
+      });
+      const data = await res.json();
+      if (data.status === "ok") {
+        this._showToast("▶️ Automatisation exécutée avec succès !");
+      } else {
+        this._showToast("⚠️ Exécution bloquée (conditions non remplies)");
+      }
+      await this._fetchData();
+    }
+
+    async _deleteAutomation(autoId) {
+      if (!confirm("Voulez-vous vraiment supprimer cette automatisation ?")) return;
+      if (!this._hass) return;
+      await this._hass.fetchWithAuth("/api/domolink_planification/delete_automation", {
+        method: "POST",
+        body: JSON.stringify({ id: autoId }),
+      });
+      this._showToast("🗑️ Automatisation supprimée.");
+      await this._fetchData();
+    }
+
+    async _dryRunConditions(auto) {
+      if (!this._hass) return;
+      const res = await this._hass.fetchWithAuth("/api/domolink_planification/test_conditions", {
+        method: "POST",
+        body: JSON.stringify({
+          conditions: auto.conditions || [],
+          condition_mode: auto.condition_mode || "and",
+        }),
+      });
+      const data = await res.json();
+      let msg = data.passed ? "✅ Toutes les conditions sont VALIDÉES en direct !\n\n" : "❌ Conditions NON REMPLIES en direct :\n\n";
+      (data.traces || []).forEach((t, i) => {
+        msg += `${t.passed ? "🟢" : "🔴"} Condition ${i + 1} (${t.type}): ${t.reason}\n`;
+      });
+      if (!data.traces || data.traces.length === 0) {
+        msg = "ℹ️ Aucune condition configurée (déclenchement inconditionnel).";
+      }
+      alert(msg);
+    }
+
+    _openAutomationModal(auto = null) {
+      const defaultAuto = {
+        id: "",
+        name: "Ouverture Portail par Télécommande",
+        enabled: true,
+        mode: "single",
+        debounce_ms: 1000,
+        condition_mode: "and",
+        triggers: [
+          {
+            type: "button",
+            device_id: "dbe1f8c50e85cbfe2b760c5915445a21",
+            action: "any",
+          }
+        ],
+        conditions: [],
+        actions: [
+          {
+            type: "service",
+            action: "switch.turn_on",
+            target: {
+              device_id: "6a6b5cc7e4dcf6153eb1cb9c3fe4a721",
+              entity_id: "switch.shelly_ouverture_portail_voiture",
+            }
+          }
+        ]
+      };
+
+      this._editingAuto = auto ? JSON.parse(JSON.stringify(auto)) : defaultAuto;
+      this._renderAutomationModal();
+    }
+
+    _renderAutomationModal() {
+      const a = this._editingAuto;
+      if (!a) return;
+
+      const modalEl = document.createElement("div");
+      modalEl.className = "modal-backdrop";
+
+      const tr0 = (a.triggers && a.triggers[0]) || { type: "button", device_id: "", action: "any" };
+      const act0 = (a.actions && a.actions[0]) || { action: "switch.turn_on", target: { device_id: "", entity_id: "" } };
+      const actTarget = act0.target || {};
+
+      modalEl.innerHTML = `
+        <div class="modal-card" style="max-width: 680px;">
+          <div class="modal-header">
+            <div style="display:flex; align-items:center; gap: 10px;">
+              <ha-icon icon="mdi:lightning-bolt" style="color: #6366f1;"></ha-icon>
+              <h2 class="modal-title">${a.id ? 'Modifier l\'Automatisation' : 'Nouvelle Automatisation'}</h2>
+            </div>
+            <button class="btn-icon" id="btn-close-auto-modal"><ha-icon icon="mdi:close"></ha-icon></button>
+          </div>
+
+          <div class="modal-body">
+            <div class="form-group">
+              <label>Nom de l'automatisation</label>
+              <input type="text" class="form-control" id="auto-name" value="${escapeHtml(a.name || '')}" placeholder="Ex: Télécommande Portail Shelly">
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div class="form-group">
+                <label>Mode d'exécution</label>
+                <select class="form-control" id="auto-mode">
+                  <option value="single" ${a.mode === 'single' ? 'selected' : ''}>single (recommandé - protection ré-entrance)</option>
+                  <option value="restart" ${a.mode === 'restart' ? 'selected' : ''}>restart (relance à chaque appui)</option>
+                  <option value="queued" ${a.mode === 'queued' ? 'selected' : ''}>queued (file d'attente)</option>
+                  <option value="parallel" ${a.mode === 'parallel' ? 'selected' : ''}>parallel (simultané)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Anti-rebond matériel (ms)</label>
+                <input type="number" class="form-control" id="auto-debounce" value="${escapeHtml(String(a.debounce_ms || 1000))}" step="100" min="0" max="10000" placeholder="1000">
+                <div style="font-size:11px;color:#94a3b8;margin-top:4px;">Bloque les doubles clics parasites dans cet intervalle.</div>
+              </div>
+            </div>
+
+            <!-- SECTION DÉCLENCHEUR -->
+            <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; margin: 16px 0;">
+              <div style="font-weight: 700; color: #38bdf8; margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
+                <ha-icon icon="mdi:ray-start-arrow"></ha-icon>
+                <span>Déclencheur Principal (Trigger)</span>
+              </div>
+
+              <div class="form-group">
+                <label>Type de déclencheur</label>
+                <select class="form-control" id="auto-trigger-type">
+                  <option value="button" ${tr0.type === 'button' ? 'selected' : ''}>🔘 Bouton physique / Télécommande (Zigbee ZHA, Z2M)</option>
+                  <option value="state" ${tr0.type === 'state' ? 'selected' : ''}>📊 Changement d'état d'entité</option>
+                  <option value="numeric_state" ${tr0.type === 'numeric_state' ? 'selected' : ''}>📈 Seuil numérique (Capteur)</option>
+                </select>
+              </div>
+
+              <div id="section-auto-btn" style="${tr0.type === 'button' ? '' : 'display:none;'}">
+                <div class="form-group">
+                  <label>Identifiant Appareil (Device ID) ou IEEE</label>
+                  <div style="display:flex; gap:8px;">
+                    <input type="text" class="form-control" id="auto-btn-device" value="${escapeHtml(tr0.device_id || '')}" placeholder="Ex: dbe1f8c50e85cbfe2b760c5915445a21">
+                    <button type="button" class="btn btn-secondary" id="btn-sniff-device" title="Écouter l'appui en direct" style="white-space:nowrap;">
+                      <ha-icon icon="mdi:ear-hearing"></ha-icon> <span>Capturer</span>
+                    </button>
+                  </div>
+                  <div id="sniff-status" style="font-size:12px;color:#38bdf8;margin-top:6px;display:none;"></div>
+                </div>
+
+                <div class="form-group">
+                  <label>Type d'appui à détecter</label>
+                  <select class="form-control" id="auto-btn-action">
+                    <option value="any" ${tr0.action === 'any' ? 'selected' : ''}>N'importe quel appui (court, long, double - recommandé pour télécommande)</option>
+                    <option value="single" ${tr0.action === 'single' ? 'selected' : ''}>Appui simple (court)</option>
+                    <option value="double" ${tr0.action === 'double' ? 'selected' : ''}>Double clic</option>
+                    <option value="hold" ${tr0.action === 'hold' ? 'selected' : ''}>Appui maintenu (long)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div id="section-auto-state" style="${tr0.type === 'state' ? '' : 'display:none;'}">
+                <div class="form-group">
+                  <label>Entité surveillée</label>
+                  <input type="text" class="form-control" id="auto-state-entity" value="${escapeHtml(tr0.entity_id || '')}" placeholder="Ex: binary_sensor.etat_du_portail">
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                  <div class="form-group">
+                    <label>De l'état (facultatif)</label>
+                    <input type="text" class="form-control" id="auto-state-from" value="${escapeHtml(tr0.from || '')}" placeholder="off">
+                  </div>
+                  <div class="form-group">
+                    <label>Vers l'état</label>
+                    <input type="text" class="form-control" id="auto-state-to" value="${escapeHtml(tr0.to || 'on')}" placeholder="on">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION ACTION -->
+            <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; margin: 16px 0;">
+              <div style="font-weight: 700; color: #34d399; margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
+                <ha-icon icon="mdi:play-circle-outline"></ha-icon>
+                <span>Action à exécuter</span>
+              </div>
+
+              <div class="form-group">
+                <label>Action / Commande Home Assistant</label>
+                <select class="form-control" id="auto-act-service">
+                  <option value="switch.turn_on" ${(act0.action || act0.service) === 'switch.turn_on' ? 'selected' : ''}>⚡ Interrupteur : Allumer (switch.turn_on)</option>
+                  <option value="switch.turn_off" ${(act0.action || act0.service) === 'switch.turn_off' ? 'selected' : ''}>⚡ Interrupteur : Éteindre (switch.turn_off)</option>
+                  <option value="switch.toggle" ${(act0.action || act0.service) === 'switch.toggle' ? 'selected' : ''}>⚡ Interrupteur : Basculer (switch.toggle)</option>
+                  <option value="cover.open_cover" ${(act0.action || act0.service) === 'cover.open_cover' ? 'selected' : ''}>🚪 Portail / Volet : Ouvrir (cover.open_cover)</option>
+                  <option value="cover.close_cover" ${(act0.action || act0.service) === 'cover.close_cover' ? 'selected' : ''}>🚪 Portail / Volet : Fermer (cover.close_cover)</option>
+                  <option value="script.turn_on" ${(act0.action || act0.service) === 'script.turn_on' ? 'selected' : ''}>📜 Exécuter un Script (script.turn_on)</option>
+                </select>
+              </div>
+
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                  <label>Identifiant Appareil (Device ID cible)</label>
+                  <input type="text" class="form-control" id="auto-act-device" value="${escapeHtml(actTarget.device_id || '')}" placeholder="Ex: 6a6b5cc7e4dcf6153eb1cb9c3fe4a721">
+                </div>
+                <div class="form-group">
+                  <label>Ou Entité cible (Entity ID)</label>
+                  <input type="text" class="form-control" id="auto-act-entity" value="${escapeHtml(actTarget.entity_id || '')}" placeholder="Ex: switch.shelly_ouverture_portail_voiture">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="btn-cancel-auto-modal">Annuler</button>
+            <button class="btn btn-primary" id="btn-save-auto-modal" style="background: linear-gradient(135deg, #6366f1, #4f46e5);">
+              <ha-icon icon="mdi:content-save"></ha-icon> <span>Enregistrer l'automatisation</span>
+            </button>
+          </div>
+        </div>
+      `;
+
+      this.shadowRoot.appendChild(modalEl);
+
+      // Fermeture
+      modalEl.querySelector("#btn-close-auto-modal").addEventListener("click", () => modalEl.remove());
+      modalEl.querySelector("#btn-cancel-auto-modal").addEventListener("click", () => modalEl.remove());
+
+      // Changement de type de déclencheur
+      const trSelect = modalEl.querySelector("#auto-trigger-type");
+      trSelect.addEventListener("change", (e) => {
+        const val = e.currentTarget.value;
+        const secBtn = modalEl.querySelector("#section-auto-btn");
+        const secSt = modalEl.querySelector("#section-auto-state");
+        if (secBtn) secBtn.style.display = val === "button" ? "" : "none";
+        if (secSt) secSt.style.display = val === "state" ? "" : "none";
+      });
+
+      // Bouton Sniffer (Capturer l'appui en direct)
+      const btnSniff = modalEl.querySelector("#btn-sniff-device");
+      const sniffStatus = modalEl.querySelector("#sniff-status");
+      if (btnSniff) {
+        btnSniff.addEventListener("click", async () => {
+          btnSniff.disabled = true;
+          sniffStatus.style.display = "block";
+          sniffStatus.innerHTML = "🎧 Écoute active... Appuyez sur votre bouton physique maintenant !";
+
+          await this._hass.fetchWithAuth("/api/domolink_planification/start_sniffer", {
+            method: "POST",
+            body: JSON.stringify({ duration: 25 }),
+          });
+
+          const pollInterval = setInterval(async () => {
+            try {
+              const res = await this._hass.fetchWithAuth("/api/domolink_planification/sniffer_status");
+              const data = await res.json();
+              if (data.event) {
+                clearInterval(pollInterval);
+                btnSniff.disabled = false;
+                const devId = data.event.event_data?.device_id || data.event.event_data?.device_ieee || "";
+                modalEl.querySelector("#auto-btn-device").value = devId;
+                sniffStatus.innerHTML = `✅ Bouton capturé avec succès ! (Device: <strong>${escapeHtml(devId)}</strong>)`;
+              } else if (!data.active) {
+                clearInterval(pollInterval);
+                btnSniff.disabled = false;
+                sniffStatus.innerHTML = "⏱️ Temps d'écoute écoulé. Vous pouvez saisir l'ID manuellement.";
+              }
+            } catch (err) {
+              clearInterval(pollInterval);
+              btnSniff.disabled = false;
+            }
+          }, 600);
+        });
+      }
+
+      // Enregistrement
+      modalEl.querySelector("#btn-save-auto-modal").addEventListener("click", async () => {
+        const autoData = {
+          id: a.id || `auto_${Date.now()}`,
+          name: modalEl.querySelector("#auto-name").value.trim() || "Automatisation",
+          enabled: true,
+          mode: modalEl.querySelector("#auto-mode").value,
+          debounce_ms: parseInt(modalEl.querySelector("#auto-debounce").value, 10) || 1000,
+          condition_mode: "and",
+          triggers: [],
+          conditions: a.conditions || [],
+          actions: [],
+        };
+
+        const tType = modalEl.querySelector("#auto-trigger-type").value;
+        if (tType === "button") {
+          autoData.triggers.push({
+            type: "button",
+            device_id: modalEl.querySelector("#auto-btn-device").value.trim(),
+            action: modalEl.querySelector("#auto-btn-action").value,
+          });
+        } else if (tType === "state") {
+          autoData.triggers.push({
+            type: "state",
+            entity_id: modalEl.querySelector("#auto-state-entity").value.trim(),
+            from: modalEl.querySelector("#auto-state-from").value.trim() || undefined,
+            to: modalEl.querySelector("#auto-state-to").value.trim() || "on",
+          });
+        }
+
+        const actService = modalEl.querySelector("#auto-act-service").value;
+        const actDevice = modalEl.querySelector("#auto-act-device").value.trim();
+        const actEntity = modalEl.querySelector("#auto-act-entity").value.trim();
+
+        const actObj = {
+          type: "service",
+          action: actService,
+          target: {},
+        };
+        if (actDevice) actObj.target.device_id = actDevice;
+        if (actEntity) actObj.target.entity_id = actEntity;
+        autoData.actions.push(actObj);
+
+        await this._hass.fetchWithAuth("/api/domolink_planification/save_automation", {
+          method: "POST",
+          body: JSON.stringify(autoData),
+        });
+
+        modalEl.remove();
+        this._showToast("⚡ Automatisation enregistrée avec succès !");
+        await this._fetchData();
+      });
+    }
+
 
     _getLabelsList() {
       if (this._data && Array.isArray(this._data.labels) && this._data.labels.length > 0) {
