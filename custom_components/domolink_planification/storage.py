@@ -36,6 +36,8 @@ class PlanificationStorage:
             },
             "gate": dict(DEFAULT_GATE_CONFIG),
             "gate_history": [],
+            "automations": {},
+            "automation_traces": [],
         }
 
     async def async_load(self) -> dict[str, Any]:
@@ -56,7 +58,13 @@ class PlanificationStorage:
             for k, v in DEFAULT_GATE_CONFIG.items():
                 gate_data.setdefault(k, v)
             self.data.setdefault("gate_history", [])
-            _LOGGER.info("DomoLink-Planification: %d règle(s) chargée(s) depuis le stockage", len(self.data["schedules"]))
+            self.data.setdefault("automations", {})
+            self.data.setdefault("automation_traces", [])
+            _LOGGER.info(
+                "DomoLink-Planification: %d règle(s), %d automatisation(s) chargée(s)",
+                len(self.data["schedules"]),
+                len(self.data["automations"]),
+            )
         else:
             _LOGGER.info("DomoLink-Planification: Nouveau stockage initialisé")
         return self.data
@@ -143,4 +151,45 @@ class PlanificationStorage:
         if len(history) > 100:
             self.data["gate_history"] = history[-100:]
         await self.async_save()
+
+    # -------------------------------------------------------------------------
+    # Gestion des Automatisations Modernes & Traces
+    # -------------------------------------------------------------------------
+    def get_automations(self) -> dict[str, dict[str, Any]]:
+        """Retourne toutes les automatisations enregistrées."""
+        return self.data.get("automations", {})
+
+    def get_automation(self, automation_id: str) -> dict[str, Any] | None:
+        """Retourne une automatisation spécifique par son ID."""
+        return self.data.get("automations", {}).get(automation_id)
+
+    async def async_save_automation(self, automation_id: str, auto_data: dict[str, Any]) -> None:
+        """Crée ou met à jour une automatisation."""
+        auto_data["id"] = automation_id
+        self.data["automations"][automation_id] = auto_data
+        await self.async_save()
+
+    async def async_delete_automation(self, automation_id: str) -> bool:
+        """Supprime une automatisation par son ID."""
+        if automation_id in self.data.get("automations", {}):
+            del self.data["automations"][automation_id]
+            await self.async_save()
+            return True
+        return False
+
+    def get_automation_traces(self, automation_id: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+        """Retourne les traces d'exécution récentes."""
+        traces: list[dict[str, Any]] = self.data.get("automation_traces", [])
+        if automation_id:
+            traces = [t for t in traces if t.get("automation_id") == automation_id]
+        return list(reversed(traces))[:limit]
+
+    async def async_add_automation_trace(self, trace_entry: dict[str, Any]) -> None:
+        """Ajoute une trace d'exécution d'automatisation (garde 100 max)."""
+        traces: list[dict[str, Any]] = self.data.setdefault("automation_traces", [])
+        traces.append(trace_entry)
+        if len(traces) > 100:
+            self.data["automation_traces"] = traces[-100:]
+        await self.async_save()
+
 

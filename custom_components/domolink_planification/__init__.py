@@ -106,9 +106,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 await coordinator.storage.async_save_schedule(schedule_id, sched)
                 coordinator.async_set_updated_data(await coordinator._async_update_data())
 
+    async def handle_trigger_auto(call: ServiceCall) -> None:
+        """Déclenche manuellement une automatisation DomoLink."""
+        automation_id = call.data.get("automation_id")
+        if automation_id:
+            auto = coordinator.storage.get_automation(automation_id)
+            if auto:
+                await coordinator.automation_engine._async_run_automation_flow(
+                    automation_id, auto, {"trigger_type": "manual_service"}
+                )
+
     async_register_admin_service(hass, DOMAIN, "trigger_schedule", handle_trigger)
     async_register_admin_service(hass, DOMAIN, "refresh_solar_shading", handle_solar_refresh)
     async_register_admin_service(hass, DOMAIN, "set_schedule_enabled", handle_set_enabled)
+    async_register_admin_service(hass, DOMAIN, "trigger_automation", handle_trigger_auto)
+
 
     # 6. Écoute des modifications d'options (toggle panneau)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
@@ -196,8 +208,14 @@ class DomolinkPlanificationApiView(HomeAssistantView):
                 "solar_states": self.coordinator.data.get("solar_states", {}),
                 "gate": self.coordinator.get_gate_status(),
                 "gate_history": self.coordinator.storage.get_gate_history(),
+                "automations": self.coordinator.storage.get_automations(),
+                "automation_traces": self.coordinator.storage.get_automation_traces(),
             }
             return self.json(data)
+
+        if action == "sniffer_status":
+            return self.json(self.coordinator.automation_engine.get_sniffed_event())
+
 
         if action == "gate_data":
             return self.json({
@@ -272,5 +290,55 @@ class DomolinkPlanificationApiView(HomeAssistantView):
 
             self.coordinator.async_set_updated_data(await self.coordinator._async_update_data())
             return self.json({"status": "ok", "gate": self.coordinator.get_gate_status()})
+
+        # --- ACTIONS BRIQUE AUTOMATISATIONS ---
+        if action == "save_automation":
+            auto_id = body.get("id") or f"auto_{int(self.coordinator.hass.loop.time() * 1000)}"
+            await self.coordinator.storage.async_save_automation(auto_id, body)
+            self.coordinator.async_set_updated_data(await self.coordinator._async_update_data())
+            return self.json({"status": "ok", "id": auto_id})
+
+        if action == "delete_automation":
+            auto_id = body.get("id")
+            if auto_id:
+                success = await self.coordinator.storage.async_delete_automation(auto_id)
+                self.coordinator.async_set_updated_data(await self.coordinator._async_update_data())
+                return self.json({"status": "ok" if success else "not_found"})
+            return self.json({"error": "ID manquant"}, status=400)
+
+        if action == "trigger_automation":
+            auto_id = body.get("id")
+            if auto_id:
+                auto = self.coordinator.storage.get_automation(auto_id)
+                if auto:
+                    success = await self.coordinator.automation_engine._async_run_automation_flow(
+                        auto_id, auto, {"trigger_type": "manual_ui"}
+                    )
+                    return self.json({"status": "ok" if success else "blocked_or_failed"})
+            return self.json({"error": "ID manquant ou introuvable"}, status=400)
+
+        if action == "test_conditions":
+            conditions = body.get("conditions", [])
+            mode = body.get("condition_mode", "and")
+            passed, traces = self.coordinator.automation_engine.evaluate_conditions(conditions, mode)
+            return self.json({"passed": passed, "traces": traces})
+
+        if action == "start_sniffer":
+            duration = int(body.get("duration", 30))
+            self.coordinator.automation_engine.start_sniffer(duration_seconds=duration)
+            return self.json({"status": "ok", "duration": duration})
+
+        if action == "set_automation_enabled":
+            auto_id = body.get("id")
+            enabled = body.get("enabled", True)
+            if auto_id:
+                auto = self.coordinator.storage.get_automation(auto_id)
+                if auto:
+                    auto["enabled"] = enabled
+                    await self.coordinator.storage.async_save_automation(auto_id, auto)
+                    self.coordinator.async_set_updated_data(await self.coordinator._async_update_data())
+                    return self.json({"status": "ok"})
+            return self.json({"error": "ID manquant"}, status=400)
+
 
         return self.json({"error": "Action inconnue"}, status=400)

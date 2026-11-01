@@ -76,7 +76,22 @@ Moteur autonome (sans API tierce) pour :
 
 ---
 
+### 8. ⚡ Brique d'Automatisations Modernes & Efficaces (Nouveauté v2.1.0)
+* **Déclencheurs Universels & Boutons Intelligents** :
+  * Détection automatique des boutons physiques Zigbee (**ZHA**, **Zigbee2MQTT**, **deCONZ**) : clic simple, double clic, appui long (hold) et relâchement.
+  * Changement d'état d'entités, seuils numériques (`numeric_state`), plages horaires, soleil et présences.
+* **Anti-Rebond Matériel Intégré (Debounce)** : Temporisation réglable (ex. 1000 ms) pour éliminer les doubles déclenchements parasites de télécommandes ou relais.
+* **Modes d'Exécution Flexibles** : `single` (protection contre ré-entrance), `restart` (recommence la séquence), `queued` (file d'attente), `parallel`.
+* **Filtres Contextuels & Jours Fériés 100% Offline** : Combinaison de conditions avec logique `ET` / `OU`, vérification d'état, de présence et du calendrier de jours fériés autonome.
+* **Observabilité & Live Dry-Run** :
+  * Évaluation en direct de chaque condition (pastilles temps réel).
+  * Enregistrement des traces d'audit (temps d'exécution en millisecondes, raison de blocage, étape par étape).
+  * Mode **Sniffer / Apprentissage direct** pour capturer un bouton physique sans coder.
+
+---
+
 ## 🚀 Installation
+
 
 ### Via HACS (Recommandé)
 1. Ouvrez **HACS** dans votre barre latérale Home Assistant.
@@ -93,6 +108,8 @@ Moteur autonome (sans API tierce) pour :
 | `domolink_planification.trigger_schedule` | Déclenche immédiatement une planification | `schedule_id` (obligatoire) |
 | `domolink_planification.refresh_solar_shading` | Force la réévaluation de tous les volets solaires | Aucun |
 | `domolink_planification.set_schedule_enabled` | Active ou suspend une règle | `schedule_id`, `enabled` (bool) |
+| `domolink_planification.trigger_automation` | Déclenche immédiatement une automatisation DomoLink | `automation_id` (obligatoire) |
+
 
 ---
 ---

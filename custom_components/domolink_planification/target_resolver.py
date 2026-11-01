@@ -29,6 +29,8 @@ from .const import (
     TARGET_TYPE_SEQUENCE,
 )
 
+TARGET_TYPE_DEVICE = "device"
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -78,7 +80,22 @@ class TargetResolver:
                 scene_id = f"scene.{scene_id}"
             return [scene_id]
 
+        # 7. Appareil direct (Device ID)
+        if target_type in (TARGET_TYPE_DEVICE, "device", "device_id"):
+            return self._resolve_by_device(str(target_value))
+
         return []
+
+    def _resolve_by_device(self, device_id: str) -> list[str]:
+        """Trouve toutes les entités associées à un appareil donné."""
+        try:
+            ent_reg = er.async_get(self.hass)
+            entries = er.async_entries_for_device(ent_reg, device_id)
+            return [e.entity_id for e in entries if not e.disabled_by]
+        except Exception as err:
+            _LOGGER.debug("Erreur résolution entités pour device %s: %s", device_id, err)
+            return []
+
 
     def _resolve_by_label(self, label_id_or_name: str) -> list[str]:
         """Trouve toutes les entités associées à une étiquette donnée."""
@@ -155,7 +172,18 @@ class TargetResolver:
     ) -> bool:
         """Exécute l'action programmée sur la ou les cibles résolues."""
         try:
+            # 0. Support direct de la syntaxe HA moderne: action/service avec target (device_id, entity_id, area_id)
+            target_dict = action_data.get("target")
+            action_full = action_data.get("action") or action_data.get("service")
+            if target_dict and isinstance(target_dict, dict) and action_full and "." in action_full:
+                dom, srv = action_full.split(".", 1)
+                data = dict(action_data.get("data", {}))
+                _LOGGER.info("DomoLink-Planification: Appel ciblé %s.%s avec target=%s", dom, srv, target_dict)
+                await self.hass.services.async_call(dom, srv, data, blocking=True, target=target_dict)
+                return True
+
             # Séquence multi-étapes
+
             if target_type == TARGET_TYPE_SEQUENCE:
                 steps = action_data.get("steps", [])
                 for i, step in enumerate(steps):
