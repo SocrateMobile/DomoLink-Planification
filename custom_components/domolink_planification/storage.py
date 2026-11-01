@@ -33,6 +33,8 @@ class PlanificationStorage:
                 "holiday_mode": HOLIDAY_MODE_ALWAYS,
                 "presence_entity": None,
                 "alarm_entity": None,
+                "vacation_mode": False,
+                "solar_manual_override_minutes": 120,
             },
             "gate": dict(DEFAULT_GATE_CONFIG),
             "gates": {},
@@ -49,12 +51,14 @@ class PlanificationStorage:
             # Garantir les clés par défaut
             self.data.setdefault("schedules", {})
             self.data.setdefault("history", [])
-            self.data.setdefault("settings", {
-                "country": COUNTRY_FR,
-                "holiday_mode": HOLIDAY_MODE_ALWAYS,
-                "presence_entity": None,
-                "alarm_entity": None,
-            })
+            settings_data = self.data.setdefault("settings", {})
+            settings_data.setdefault("country", COUNTRY_FR)
+            settings_data.setdefault("holiday_mode", HOLIDAY_MODE_ALWAYS)
+            settings_data.setdefault("presence_entity", None)
+            settings_data.setdefault("alarm_entity", None)
+            settings_data.setdefault("vacation_mode", False)
+            settings_data.setdefault("solar_manual_override_minutes", 120)
+
             gate_data = self.data.setdefault("gate", {})
             for k, v in DEFAULT_GATE_CONFIG.items():
                 gate_data.setdefault(k, v)
@@ -66,6 +70,11 @@ class PlanificationStorage:
                 gate_data["id"] = primary_id
                 gate_data.setdefault("name", "Portail Principal")
                 gates_data[primary_id] = gate_data
+
+            for gid, gcfg in gates_data.items():
+                for k, v in DEFAULT_GATE_CONFIG.items():
+                    gcfg.setdefault(k, v)
+                gcfg["id"] = gid
 
             self.data.setdefault("gate_history", [])
             self.data.setdefault("automations", {})

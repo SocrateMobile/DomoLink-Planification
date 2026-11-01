@@ -1,4 +1,4 @@
-"""Entités Switch pour activer/désactiver les règles DomoLink-Planification."""
+"""Entités Switch pour activer/désactiver les règles, automatisations, accès et le Mode Vacances DomoLink."""
 
 from __future__ import annotations
 
@@ -25,9 +25,12 @@ async def async_setup_entry(
     """Configure les entités switch depuis une ConfigEntry."""
     coordinator: DomolinkPlanificationCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     added_ids: set[str] = set()
+    added_auto_ids: set[str] = set()
+    added_gate_ids: set[str] = {"gate_1"}
 
-    # Interrupteurs du Portail DomoLink
+    # Interrupteurs globaux et Portail principal
     async_add_entities([
+        VacationModeSwitch(coordinator, entry),
         GateAutoCloseSwitch(coordinator, entry),
         GateHoldOpenSwitch(coordinator, entry),
     ])
@@ -35,16 +38,68 @@ async def async_setup_entry(
     @callback
     def _update_entities() -> None:
         schedules = coordinator.storage.get_schedules()
-        new_entities = []
-        for sched_id, sched_data in schedules.items():
+        new_entities: list[SwitchEntity] = []
+        for sched_id in schedules:
             if sched_id not in added_ids:
                 added_ids.add(sched_id)
                 new_entities.append(PlanificationSwitch(coordinator, entry, sched_id))
+
+        automations = coordinator.storage.get_automations()
+        for auto_id in automations:
+            if auto_id not in added_auto_ids:
+                added_auto_ids.add(auto_id)
+                new_entities.append(AutomationSwitch(coordinator, entry, auto_id))
+
+        gates = coordinator.storage.get_gates()
+        for gate_id in gates:
+            if gate_id not in added_gate_ids:
+                added_gate_ids.add(gate_id)
+                new_entities.append(GateAutoCloseSwitch(coordinator, entry, gate_id=gate_id))
+                new_entities.append(GateHoldOpenSwitch(coordinator, entry, gate_id=gate_id))
+
         if new_entities:
             async_add_entities(new_entities)
 
     _update_entities()
     entry.async_on_unload(coordinator.async_add_listener(_update_entities))
+
+
+class VacationModeSwitch(CoordinatorEntity[DomolinkPlanificationCoordinator], SwitchEntity):
+    """Interrupteur global activant le Mode Vacances / Simulation de présence."""
+
+    _attr_has_entity_name = True
+    _attr_name = "Mode Vacances (Simulation de Présence)"
+    _attr_icon = "mdi:beach"
+
+    def __init__(
+        self,
+        coordinator: DomolinkPlanificationCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_vacation_mode_switch"
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self.coordinator.storage.get_settings().get("vacation_mode", False))
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self.coordinator.storage.async_update_settings({"vacation_mode": True})
+        self.coordinator.async_set_updated_data(await self.coordinator._async_update_data())
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self.coordinator.storage.async_update_settings({"vacation_mode": False})
+        self.coordinator.async_set_updated_data(await self.coordinator._async_update_data())
+
+    @property
+    def device_info(self) -> dict[str, Any]:
+        return {
+            "identifiers": {(DOMAIN, "hub")},
+            "name": NAME,
+            "manufacturer": "DomoLink",
+            "model": "Planification & Suivi Solaire",
+        }
 
 
 class PlanificationSwitch(CoordinatorEntity[DomolinkPlanificationCoordinator], SwitchEntity):
@@ -107,6 +162,8 @@ class PlanificationSwitch(CoordinatorEntity[DomolinkPlanificationCoordinator], S
             "holiday_mode": sched.get("holiday_mode"),
             "presence_condition": sched.get("presence_condition"),
             "alarm_condition": sched.get("alarm_condition"),
+            "vacation_mode": sched.get("vacation_mode"),
+            "random_jitter_minutes": sched.get("random_jitter_minutes", 0),
         }
 
     @property
@@ -120,40 +177,120 @@ class PlanificationSwitch(CoordinatorEntity[DomolinkPlanificationCoordinator], S
         }
 
 
-class GateAutoCloseSwitch(CoordinatorEntity[DomolinkPlanificationCoordinator], SwitchEntity):
-    """Interrupteur activant ou suspendant la fermeture automatique du portail."""
+class AutomationSwitch(CoordinatorEntity[DomolinkPlanificationCoordinator], SwitchEntity):
+    """Interrupteur permettant d'activer ou de suspendre une automatisation DomoLink."""
 
     _attr_has_entity_name = True
-    _attr_name = "Portail Fermeture Automatique"
+    _attr_icon = "mdi:robot-outline"
+
+    def __init__(
+        self,
+        coordinator: DomolinkPlanificationCoordinator,
+        entry: ConfigEntry,
+        automation_id: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entry = entry
+        self.automation_id = automation_id
+        self._attr_unique_id = f"domolink_automation_switch_{automation_id}"
+
+    @property
+    def _automation(self) -> dict[str, Any]:
+        return self.coordinator.storage.get_automation(self.automation_id) or {}
+
+    @property
+    def name(self) -> str:
+        base_name = self._automation.get("name", self.automation_id)
+        return f"Automatisation {base_name}"
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self._automation.get("enabled", True))
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        auto = self._automation
+        if auto:
+            auto["enabled"] = True
+            await self.coordinator.storage.async_save_automation(self.automation_id, auto)
+            self.coordinator.async_set_updated_data(await self.coordinator._async_update_data())
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        auto = self._automation
+        if auto:
+            auto["enabled"] = False
+            await self.coordinator.storage.async_save_automation(self.automation_id, auto)
+            self.coordinator.async_set_updated_data(await self.coordinator._async_update_data())
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        auto = self._automation
+        return {
+            "automation_id": self.automation_id,
+            "mode": auto.get("mode"),
+            "debounce_ms": auto.get("debounce_ms"),
+            "last_triggered": auto.get("last_triggered"),
+            "trigger_count": auto.get("trigger_count", 0),
+        }
+
+    @property
+    def device_info(self) -> dict[str, Any]:
+        return {
+            "identifiers": {(DOMAIN, "hub")},
+            "name": NAME,
+            "manufacturer": "DomoLink",
+            "model": "Planification & Suivi Solaire",
+        }
+
+
+class GateAutoCloseSwitch(CoordinatorEntity[DomolinkPlanificationCoordinator], SwitchEntity):
+    """Interrupteur activant ou suspendant la fermeture automatique d'un accès."""
+
+    _attr_has_entity_name = True
     _attr_icon = "mdi:gate"
 
     def __init__(
         self,
         coordinator: DomolinkPlanificationCoordinator,
         entry: ConfigEntry,
+        gate_id: str | None = None,
     ) -> None:
         super().__init__(coordinator)
         self.entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_gate_auto_close"
+        self.gate_id = gate_id
+        if gate_id and gate_id != "gate_1":
+            self._attr_unique_id = f"{entry.entry_id}_{gate_id}_auto_close"
+        else:
+            self._attr_unique_id = f"{entry.entry_id}_gate_auto_close"
+
+    @property
+    def _cfg(self) -> dict[str, Any]:
+        return self.coordinator.storage.get_gate_config(self.gate_id)
+
+    @property
+    def name(self) -> str:
+        if self.gate_id and self.gate_id != "gate_1":
+            return f"{self._cfg.get('name', self.gate_id)} Fermeture Automatique"
+        return "Portail Fermeture Automatique"
 
     @property
     def is_on(self) -> bool:
         """Retourne si la fermeture automatique est activée."""
-        cfg = self.coordinator.storage.get_gate_config()
-        return bool(cfg.get("enabled", True))
+        return bool(self._cfg.get("enabled", True))
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Active la fermeture automatique."""
-        cfg = self.coordinator.storage.get_gate_config()
+        cfg = self._cfg
         cfg["enabled"] = True
-        await self.coordinator.storage.async_update_gate_config(cfg)
+        gid = cfg.get("id") or self.gate_id or "gate_1"
+        await self.coordinator.storage.async_save_gate(gid, cfg)
         self.coordinator.async_set_updated_data(await self.coordinator._async_update_data())
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Désactive la fermeture automatique."""
-        cfg = self.coordinator.storage.get_gate_config()
+        cfg = self._cfg
         cfg["enabled"] = False
-        await self.coordinator.storage.async_update_gate_config(cfg)
+        gid = cfg.get("id") or self.gate_id or "gate_1"
+        await self.coordinator.storage.async_save_gate(gid, cfg)
         self.coordinator.async_set_updated_data(await self.coordinator._async_update_data())
 
     @property
@@ -170,37 +307,49 @@ class GateHoldOpenSwitch(CoordinatorEntity[DomolinkPlanificationCoordinator], Sw
     """Interrupteur de maintien ouvert permanent (mode travaux / réception)."""
 
     _attr_has_entity_name = True
-    _attr_name = "Portail Maintien Ouvert"
     _attr_icon = "mdi:lock-open-variant-outline"
 
     def __init__(
         self,
         coordinator: DomolinkPlanificationCoordinator,
         entry: ConfigEntry,
+        gate_id: str | None = None,
     ) -> None:
         super().__init__(coordinator)
         self.entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_gate_hold_open"
+        self.gate_id = gate_id
+        if gate_id and gate_id != "gate_1":
+            self._attr_unique_id = f"{entry.entry_id}_{gate_id}_hold_open"
+        else:
+            self._attr_unique_id = f"{entry.entry_id}_gate_hold_open"
+
+    @property
+    def _cfg(self) -> dict[str, Any]:
+        return self.coordinator.storage.get_gate_config(self.gate_id)
+
+    @property
+    def name(self) -> str:
+        if self.gate_id and self.gate_id != "gate_1":
+            return f"{self._cfg.get('name', self.gate_id)} Maintien Ouvert"
+        return "Portail Maintien Ouvert"
 
     @property
     def is_on(self) -> bool:
         """Retourne si le maintien ouvert est actif."""
-        cfg = self.coordinator.storage.get_gate_config()
-        return bool(cfg.get("hold_open", False))
+        return bool(self._cfg.get("hold_open", False))
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Active le maintien ouvert."""
-        await self.coordinator.async_gate_set_hold_open(True)
+        await self.coordinator.async_gate_set_hold_open(True, gate_id=self.gate_id)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Désactive le maintien ouvert."""
-        await self.coordinator.async_gate_set_hold_open(False)
+        await self.coordinator.async_gate_set_hold_open(False, gate_id=self.gate_id)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        cfg = self.coordinator.storage.get_gate_config()
         return {
-            "hold_open_until": cfg.get("hold_open_until"),
+            "hold_open_until": self._cfg.get("hold_open_until"),
         }
 
     @property
@@ -211,4 +360,3 @@ class GateHoldOpenSwitch(CoordinatorEntity[DomolinkPlanificationCoordinator], Sw
             "manufacturer": "DomoLink",
             "model": "Contrôleur d'Accès Universel",
         }
-

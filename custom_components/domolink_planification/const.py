@@ -55,6 +55,17 @@ TARGET_TYPE_SCENE: Final = "scene"
 TARGET_TYPE_NOTIFICATION: Final = "notification"
 TARGET_TYPE_REMINDER: Final = "reminder"
 TARGET_TYPE_SEQUENCE: Final = "sequence"
+TARGET_TYPE_GATE: Final = "domolink_gate"
+
+# Modes Vacances / Simulation de présence
+VACATION_MODE_ALWAYS: Final = "always"
+VACATION_MODE_ONLY: Final = "only_vacation"
+VACATION_MODE_EXCLUDE: Final = "exclude_vacation"
+
+# Conditions météo pour les planifications
+WEATHER_COND_ANY: Final = "any"
+WEATHER_COND_NO_RAIN: Final = "no_rain"
+WEATHER_COND_SUNNY: Final = "sunny"
 
 # Canaux de rappel / notification
 REMINDER_CHANNEL_APP: Final = "app"
@@ -177,6 +188,10 @@ DEFAULT_GATE_CONFIG: Final[dict[str, Any]] = {
     "retry_interval_minutes": 10,
     "hold_open": False,
     "hold_open_until": None,
+    "pedestrian_open_seconds": 5,
+    "pedestrian_close_minutes": 2,
+    "night_intrusion_alert": False,
+    "night_intrusion_light_entity": "",
 }
 
 # --- SECTION BRIQUE AUTOMATISATIONS MODERNES ---
@@ -217,5 +232,6 @@ AUTO_ACTION_DEVICE: Final = "device"
 AUTO_ACTION_DELAY: Final = "delay"
 AUTO_ACTION_NOTIFICATION: Final = "notification"
 AUTO_ACTION_IF_THEN: Final = "if_then"
+AUTO_ACTION_GATE: Final = "domolink_gate"
 
 

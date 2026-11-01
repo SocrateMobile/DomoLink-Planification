@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -66,7 +67,7 @@ def is_sun_striking_window(
 
 
 class SolarShadingEvaluator:
-    """Évaluateur d'état et de position pour volets roulants selon le soleil et la température."""
+    """Évaluateur d'état et de position pour volets roulants selon le soleil, la météo et les sécurités."""
 
     def __init__(self, hass: HomeAssistant) -> None:
         self.hass = hass
@@ -76,7 +77,7 @@ class SolarShadingEvaluator:
         rule_config: dict[str, Any],
         last_action_state: dict[str, Any] | None = None,
         settings: dict[str, Any] | None = None,
-        now: Any | None = None,
+        now: datetime | None = None,
     ) -> dict[str, Any]:
         """Évalue une règle de volet solaire et détermine l'action à exécuter."""
         settings = settings or {}
@@ -94,6 +95,26 @@ class SolarShadingEvaluator:
         cone_angle = float(rule_config.get("cone_angle", 60.0))
         min_elev = float(rule_config.get("min_elevation", 5.0))
         max_elev = float(rule_config.get("max_elevation", 85.0))
+
+        # Options avancées (Adaptive Cover : Dérogation manuelle, Vent, Fenêtre ouverte, Coucher du soleil)
+        raw_override_min = rule_config.get("manual_override_minutes")
+        if raw_override_min is not None and str(raw_override_min) != "":
+            override_minutes = float(raw_override_min)
+        else:
+            override_minutes = float(settings.get("solar_manual_override_minutes", 120))
+
+        close_at_sunset = bool(rule_config.get("close_at_sunset", False))
+        night_pos = int(rule_config.get("night_position", 0))
+        window_sensor_id = rule_config.get("window_sensor_entity") or rule_config.get("window_sensor_id")
+        window_open_min_pos = int(rule_config.get("window_open_min_pos", 30))
+        wind_sensor_id = (
+            rule_config.get("wind_sensor_id")
+            or rule_config.get("wind_sensor_entity")
+            or settings.get("solar_weather_entity")
+        )
+        raw_wind_thresh = rule_config.get("wind_speed_threshold")
+        wind_threshold = float(raw_wind_thresh) if raw_wind_thresh is not None and str(raw_wind_thresh) != "" else 0.0
+        wind_safe_pos = int(rule_config.get("wind_safe_position", 100))
 
         # 1. Vérifier l'état du soleil dans Home Assistant
         sun_state = self.hass.states.get("sun.sun")
@@ -133,12 +154,40 @@ class SolarShadingEvaluator:
                         except (ValueError, TypeError):
                             current_temp = None
 
-        # 4. Décision selon le mode (Été / Hiver)
+        # 3b. Vérifier la vitesse du vent (sécurité tempête)
+        current_wind: float | None = None
+        if wind_sensor_id:
+            w_state = self.hass.states.get(wind_sensor_id)
+            if w_state and w_state.state not in ("unknown", "unavailable"):
+                try:
+                    current_wind = float(w_state.state)
+                except (ValueError, TypeError):
+                    w_attr = w_state.attributes.get("wind_speed")
+                    if w_attr is not None:
+                        try:
+                            current_wind = float(w_attr)
+                        except (ValueError, TypeError):
+                            current_wind = None
+
+        # 4. Décision selon le mode (Été / Hiver / Nuit / Vent)
         target_pos: int | None = None
         should_shade = False
         reason = ""
+        wind_alert = False
 
-        if mode == SHADING_MODE_SUMMER:
+        if wind_threshold > 0 and current_wind is not None and current_wind >= wind_threshold:
+            wind_alert = True
+            should_shade = False
+            target_pos = wind_safe_pos
+            reason = (
+                f"💨 Alerte Vent Fort ({current_wind} km/h >= {wind_threshold} km/h) "
+                f"➔ Mise en sécurité à {wind_safe_pos}%"
+            )
+        elif close_at_sunset and sun_elevation < 0:
+            should_shade = True
+            target_pos = night_pos
+            reason = f"🌙 Nuit (Soleil sous l'horizon : {sun_elevation}°) ➔ Fermeture nocturne à {night_pos}%"
+        elif mode == SHADING_MODE_SUMMER:
             # Confort d'été : Fermer pour protéger de la surchauffe
             temp_condition = (current_temp is None) or (current_temp >= temp_threshold)
             if striking and temp_condition:
@@ -162,9 +211,8 @@ class SolarShadingEvaluator:
                     reason = (
                         f"🌡️ Température clémente ({current_temp}°C < {temp_threshold}°C) ➔ Maintien ouvert à {open_pos}%"
                     )
-
         else:
-            # Confort d'hiver : Ouvrir si soleil présent pour capter la chaleur gratuite, fermer la nuit
+            # Confort d'hiver : Ouvrir si soleil présent pour capter la chaleur gratuite, fermer sinon
             if striking:
                 should_shade = False
                 target_pos = open_pos
@@ -175,9 +223,10 @@ class SolarShadingEvaluator:
                 reason = f"❄️ Isolation d'hiver : Absence de soleil direct ➔ Fermeture isolante à {shading_pos}%"
 
         # 4b. Gestion de l'hystérésis anti-battement avant réouverture en mode été
-        unshaded_since = None
+        unshaded_since_iso: str | None = None
         if (
-            mode == SHADING_MODE_SUMMER
+            not wind_alert
+            and mode == SHADING_MODE_SUMMER
             and not should_shade
             and last_action_state
             and last_action_state.get("should_shade")
@@ -185,35 +234,105 @@ class SolarShadingEvaluator:
             and now is not None
         ):
             prev_unshaded = last_action_state.get("unshaded_since")
-            if prev_unshaded is None:
-                unshaded_since = now
+            prev_dt: datetime | None = None
+            if isinstance(prev_unshaded, datetime):
+                prev_dt = prev_unshaded
+            elif isinstance(prev_unshaded, str) and prev_unshaded:
+                try:
+                    prev_dt = datetime.fromisoformat(prev_unshaded)
+                except Exception:
+                    prev_dt = None
+
+            if prev_dt is None:
+                unshaded_since_iso = now.isoformat()
                 should_shade = True
                 target_pos = shading_pos
                 reason = f"⏳ Hystérésis anti-battement en cours ({int(hysteresis_minutes)} min avant réouverture)"
             else:
-                elapsed_min = (now - prev_unshaded).total_seconds() / 60.0
+                if prev_dt.tzinfo is None and now.tzinfo is not None:
+                    prev_dt = prev_dt.replace(tzinfo=now.tzinfo)
+                elapsed_min = (now - prev_dt).total_seconds() / 60.0
                 if elapsed_min < hysteresis_minutes:
-                    unshaded_since = prev_unshaded
+                    unshaded_since_iso = prev_dt.isoformat()
                     should_shade = True
                     target_pos = shading_pos
                     rem_min = max(1, int(round(hysteresis_minutes - elapsed_min)))
                     reason = f"⏳ Hystérésis anti-battement ({rem_min} min restantes avant réouverture)"
 
-        # 5. Comparer avec la position actuelle du volet pour éviter les commandes inutiles
-        cover_state = self.hass.states.get(cover_id) if cover_id else None
-        current_cover_pos = None
+        # 4c. Sécurité Fenêtre Ouverte (Aération / Oscillo-battant)
+        window_is_open = False
+        if window_sensor_id and not wind_alert:
+            win_state = self.hass.states.get(window_sensor_id)
+            if win_state and str(win_state.state).lower() in ("on", "open", "true", "1"):
+                window_is_open = True
+                if target_pos is not None and target_pos < window_open_min_pos:
+                    target_pos = window_open_min_pos
+                    reason += f" | 🪟 Fenêtre ouverte ➔ Limité à {window_open_min_pos}% (aération)"
+
+        # 5. Lecture de la position actuelle du volet & Détection de Dérogation Manuelle
+        cover_state = self.hass.states.get(cover_id) if cover_id and not str(cover_id).startswith("label:") else None
+        current_cover_pos: int | None = None
         if cover_state and "current_position" in cover_state.attributes:
-            current_cover_pos = cover_state.attributes.get("current_position")
+            try:
+                current_cover_pos = int(cover_state.attributes.get("current_position"))
+            except (ValueError, TypeError):
+                current_cover_pos = None
+
+        manual_override = False
+        override_until_iso: str | None = None
+        last_commanded_pos = last_action_state.get("last_commanded_pos") if last_action_state else None
+
+        if not wind_alert and now is not None and override_minutes > 0 and last_action_state:
+            # Vérifier si une dérogation manuelle est déjà en cours
+            prev_override_until = last_action_state.get("override_until")
+            if isinstance(prev_override_until, str) and prev_override_until:
+                try:
+                    ov_dt = datetime.fromisoformat(prev_override_until)
+                    if ov_dt.tzinfo is None and now.tzinfo is not None:
+                        ov_dt = ov_dt.replace(tzinfo=now.tzinfo)
+                    if now < ov_dt:
+                        manual_override = True
+                        override_until_iso = prev_override_until
+                        rem_ov = max(1, int(round((ov_dt - now).total_seconds() / 60.0)))
+                        reason = f"✋ Dérogation manuelle active ({rem_ov} min restantes avant reprise auto)"
+                except Exception:
+                    pass
+
+            # Détecter un nouveau mouvement manuel sur l'interrupteur mural
+            if (
+                not manual_override
+                and current_cover_pos is not None
+                and last_commanded_pos is not None
+                and abs(current_cover_pos - int(last_commanded_pos)) > 5
+            ):
+                manual_override = True
+                ov_dt = now + timedelta(minutes=override_minutes)
+                override_until_iso = ov_dt.isoformat()
+                reason = (
+                    f"✋ Action manuelle détectée (Volet à {current_cover_pos}% ≠ consigne {last_commanded_pos}%) "
+                    f"➔ Automatisme en pause pour {int(override_minutes)} min"
+                )
+                last_commanded_pos = current_cover_pos
 
         should_act = True
-        if current_cover_pos is not None and target_pos is not None:
+        if manual_override:
+            should_act = False
+        elif current_cover_pos is not None and target_pos is not None:
             # Si le volet est déjà à ±2% de la position cible, ne rien faire
             if abs(current_cover_pos - target_pos) <= 2:
                 should_act = False
 
-        # Si l'état d'ombrage n'a pas changé depuis la dernière action, respecter l'anti-battement
-        if last_action_state and last_action_state.get("should_shade") == should_shade:
+        # Si l'état d'ombrage et la position cible n'ont pas changé depuis la dernière action, ne pas spammer le relais
+        if (
+            not wind_alert
+            and last_action_state
+            and last_action_state.get("should_shade") == should_shade
+            and last_action_state.get("target_position") == target_pos
+        ):
             should_act = False
+
+        if should_act and target_pos is not None:
+            last_commanded_pos = target_pos
 
         return {
             "cover_entity_id": cover_id,
@@ -224,11 +343,16 @@ class SolarShadingEvaluator:
             "is_striking": striking,
             "current_temp": current_temp,
             "temp_threshold": temp_threshold,
+            "current_wind": current_wind,
+            "wind_alert": wind_alert,
+            "window_is_open": window_is_open,
             "should_shade": should_shade,
             "target_position": target_pos,
             "current_position": current_cover_pos,
+            "last_commanded_pos": last_commanded_pos,
+            "manual_override": manual_override,
+            "override_until": override_until_iso,
             "should_act": should_act,
             "reason": reason,
-            "unshaded_since": unshaded_since,
+            "unshaded_since": unshaded_since_iso,
         }
-

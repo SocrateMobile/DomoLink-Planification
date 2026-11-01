@@ -1637,6 +1637,7 @@
         time_type: "fixed",
         time: "07:30",
         solar_offset_minutes: 0,
+        random_jitter_minutes: 0,
         recurrence_mode: "every",
         date_selection_type: "exact_day",
         month: now.getMonth() + 1,
@@ -1647,15 +1648,26 @@
         target_type: isSolar ? "entity" : "label",
         target_value: "",
         action_service: "turn_on",
+        gate_operation: "toggle",
         reminder_channel: "app",
         reminder_message: "",
         cover_entity_id: "",
         orientation: "S",
+        mode: "summer",
         temperature_sensor_id: "",
         temperature_threshold: 24.0,
         shading_position: 20,
         open_position: 100,
+        manual_override_minutes: 120,
+        wind_speed_threshold: 0,
+        wind_safe_position: 100,
+        window_sensor_entity: "",
+        window_open_min_pos: 30,
+        close_at_sunset: false,
+        night_position: 0,
         holiday_mode: "always",
+        vacation_mode: "always",
+        weather_condition: "any",
         zone_person_id: "any",
         zone_id: "zone.home",
       };
@@ -1705,6 +1717,10 @@
             </div>
           </div>
           <div class="header-actions">
+            <button class="btn ${this._data.settings?.vacation_mode ? 'btn-primary' : 'btn-clipboard'}" id="btn-toggle-vacation" style="${this._data.settings?.vacation_mode ? 'background: linear-gradient(135deg, #f59e0b, #d97706); box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);' : ''}" title="Activer/Désactiver le Mode Vacances et Simulation de Présence">
+              <ha-icon icon="mdi:beach"></ha-icon>
+              <span>${this._data.settings?.vacation_mode ? 'Mode Vacances : ACTIF' : 'Mode Vacances'}</span>
+            </button>
             <button class="btn btn-clipboard" id="btn-copy-card"><ha-icon icon="mdi:content-copy"></ha-icon> <span>Carte Lovelace</span></button>
             <button class="btn btn-primary" id="btn-add-schedule"><ha-icon icon="mdi:plus-circle-outline"></ha-icon> <span>Planification</span></button>
             <button class="btn btn-primary" id="btn-add-solar"><ha-icon icon="mdi:weather-sunny-alert"></ha-icon> <span>Volet Solaire</span></button>
@@ -1747,6 +1763,22 @@
       `;
 
       // Event Listeners sur les boutons du bandeau supérieur
+      const btnVacation = this.shadowRoot.querySelector("#btn-toggle-vacation");
+      if (btnVacation) {
+        btnVacation.addEventListener("click", async () => {
+          if (!this._hass) return;
+          const res = await this._hass.fetchWithAuth("/api/domolink_planification/toggle_vacation_mode", {
+            method: "POST",
+            body: JSON.stringify({}),
+          });
+          if (res.ok) {
+            const d = await res.json();
+            this._showToast(d.vacation_mode ? "🏖️ Mode Vacances / Simulation de présence ACTIVÉ !" : "🏠 Mode Vacances désactivé (Retour à la normale)");
+            await this._fetchData();
+          }
+        });
+      }
+
       const btnCopy = this.shadowRoot.querySelector("#btn-copy-card");
       if (btnCopy) btnCopy.addEventListener("click", () => this._copyLovelaceCardCode());
 
@@ -1873,6 +1905,20 @@
         btn.addEventListener("click", (e) => {
           const card = e.currentTarget.closest(".card");
           if (card) this._deleteSchedule(card.dataset.id);
+        });
+      });
+
+      this.shadowRoot.querySelectorAll(".clear-override-btn").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          const card = e.currentTarget.closest(".card");
+          if (card && this._hass) {
+            await this._hass.fetchWithAuth("/api/domolink_planification/clear_solar_override", {
+              method: "POST",
+              body: JSON.stringify({ id: card.dataset.id }),
+            });
+            this._showToast("🔄 Dérogation manuelle effacée, reprise du suivi solaire automatique !");
+            await this._fetchData();
+          }
         });
       });
 
@@ -2626,8 +2672,9 @@
                   <ha-icon icon="${typeIcon}" style="color: ${gateGlowColor};"></ha-icon>
                   <span>${escapeHtml(gateName)}</span>
                 </h2>
-                <div style="font-size: 13px; color: #94a3b8; margin-top: 4px;">
-                  Type : ${typeTitle} • Mode : ${gate.is_day ? "☀️ Jour (" + escapeHtml(String(cfg.timer_day_minutes || 10)) + " min)" : "🌙 Nuit (" + escapeHtml(String(cfg.timer_night_minutes || 3)) + " min)"}
+                <div style="font-size: 13px; color: #94a3b8; margin-top: 4px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <span>Type : ${typeTitle} • Mode : ${gate.is_day ? "☀️ Jour (" + escapeHtml(String(cfg.timer_day_minutes || 10)) + " min)" : "🌙 Nuit (" + escapeHtml(String(cfg.timer_night_minutes || 3)) + " min)"}</span>
+                  ${cfg.night_intrusion_alert ? `<span class="badge badge-warning" style="font-size:11px; padding:2px 8px;"><ha-icon icon="mdi:shield-alert-outline" style="--mdc-icon-size:13px;"></ha-icon> Alerte Nuit active</span>` : ''}
                 </div>
               </div>
               <div style="display: flex; align-items: center; gap: 8px;">
@@ -2698,10 +2745,10 @@
                 <span>Actionner ${escapeHtml(gateName)}</span>
               </button>
 
-              ${cfg.pedestrian_switch_entity ? `
-                <button class="gate-btn" style="background: rgba(168, 85, 247, 0.2); border-color: rgba(168, 85, 247, 0.5); color: #c084fc;" id="btn-gate-pedestrian" title="Ouvrir l'accès piéton / portillon">
+              ${(cfg.pedestrian_switch_entity || cfg.switch_entity) ? `
+                <button class="gate-btn" style="background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.5); color: #c084fc;" id="btn-gate-pedestrian" title="${cfg.pedestrian_switch_entity ? 'Ouvrir via le relais piéton dédié' : 'Ouverture partielle temporisée (' + (cfg.pedestrian_open_seconds || 5) + 's) puis refermeture auto (' + (cfg.pedestrian_close_minutes || 2) + ' min)'}">
                   <ha-icon icon="mdi:walk"></ha-icon>
-                  <span>Accès Piéton</span>
+                  <span>Piéton / Livreur</span>
                 </button>
               ` : ''}
               
@@ -3383,6 +3430,41 @@
                 <div class="ac-selection-hint" id="ac-modal-gate-notify-hint"></div>
               </div>
             </div>
+
+            <!-- SECTION MODE PIÉTON / LIVREUR & ALERTE NOCTURNE -->
+            <div style="background: rgba(15, 23, 42, 0.45); border: 1px solid rgba(168, 85, 247, 0.25); border-radius: 10px; padding: 14px;">
+              <div style="font-weight: 700; font-size: 13px; color: #c084fc; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;">
+                <ha-icon icon="mdi:walk"></ha-icon>
+                <span>🚶 Mode Piéton / Livreur (Ouverture partielle sur relais unique)</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label style="font-size: 12px;">Temps d'ouverture partielle (sec)</label>
+                  <input type="number" min="2" max="30" class="form-control" id="modal-gate-ped-open-sec" value="${escapeHtml(String(gData.pedestrian_open_seconds ?? 5))}">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label style="font-size: 12px;">Refermeture auto Piéton (min)</label>
+                  <input type="number" min="1" max="30" class="form-control" id="modal-gate-ped-close-min" value="${escapeHtml(String(gData.pedestrian_close_minutes ?? 2))}">
+                </div>
+              </div>
+            </div>
+
+            <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 10px; padding: 14px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <div>
+                  <span style="font-weight: 700; font-size: 13px; color: #f87171;">🚨 Alerte Intrusion / Ouverture en Plage Nocturne</span>
+                  <div style="font-size: 11px; color: #94a3b8;">Envoie une alerte critique immédiate si cet accès s'ouvre pendant la nuit</div>
+                </div>
+                <label class="switch">
+                  <input type="checkbox" id="modal-gate-night-alert" ${gData.night_intrusion_alert ? 'checked' : ''}>
+                  <span class="slider"></span>
+                </label>
+              </div>
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="font-size: 12px;">Éclairage extérieur à allumer automatiquement la nuit (Optionnel)</label>
+                <input type="text" class="form-control" id="modal-gate-night-light" value="${escapeHtml(gData.night_intrusion_light_entity || '')}" placeholder="Ex: light.projecteur_cour ou switch.lumiere_portail">
+              </div>
+            </div>
           </div>
 
           <div class="modal-footer" style="margin-top: 24px; display: flex; justify-content: flex-end; gap: 10px;">
@@ -3494,6 +3576,10 @@
           max_retries: parseInt(modalEl.querySelector("#modal-gate-max-retries")?.value || "6", 10),
           check_delay: parseInt(modalEl.querySelector("#modal-gate-check-delay")?.value || "60", 10),
           retry_interval_minutes: parseInt(modalEl.querySelector("#modal-gate-retry-interval")?.value || "10", 10),
+          pedestrian_open_seconds: parseInt(modalEl.querySelector("#modal-gate-ped-open-sec")?.value || "5", 10),
+          pedestrian_close_minutes: parseInt(modalEl.querySelector("#modal-gate-ped-close-min")?.value || "2", 10),
+          night_intrusion_alert: modalEl.querySelector("#modal-gate-night-alert")?.checked || false,
+          night_intrusion_light_entity: modalEl.querySelector("#modal-gate-night-light")?.value?.trim() || "",
         };
 
         try {
@@ -3648,14 +3734,52 @@
         }
       }
 
-      // Cible ou Rappel
+      // Cible ou Rappel ou Portail DomoLink
       let targetDesc = "";
       if (sched.target_type === "reminder") {
         const ch = (REMINDER_CHANNELS.find(c => c.id === sched.reminder_channel) || {}).label || sched.reminder_channel || "Notification";
         targetDesc = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:bell-ring-outline" style="--mdc-icon-size:15px;color:#a855f7;"></ha-icon> <strong>Rappel [${escapeHtml(ch)}]</strong> : <span style="color:#e2e8f0;">"${escapeHtml(sched.reminder_message || '')}"</span></span>`;
+      } else if (sched.target_type === "domolink_gate") {
+        const gatesMap = (this._data && this._data.gates) ? this._data.gates : {};
+        const gObj = gatesMap[sched.target_value] || {};
+        const gName = gObj.name || sched.target_value || "Portail";
+        const opMap = { toggle: "Impulsion", open: "Ouvrir", close: "Fermer", pedestrian: "Piéton / Livreur", hold_open: "Maintenir ouvert", cancel_hold_open: "Fin maintien" };
+        const opLabel = opMap[sched.gate_operation || sched.action_service] || sched.action_service || "Impulsion";
+        targetDesc = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:gate" style="--mdc-icon-size:15px;color:#10b981;"></ha-icon> <strong>Accès DomoLink</strong> ➔ <code>${escapeHtml(gName)}</code> (${escapeHtml(opLabel)})</span>`;
       } else {
         targetDesc = `<span style="display:inline-flex;align-items:center;gap:4px;"><ha-icon icon="mdi:lightning-bolt-outline" style="--mdc-icon-size:15px;color:#38bdf8;"></ha-icon> ${escapeHtml(sched.target_type)} ➔ <code>${escapeHtml(sched.target_value)}</code> (${escapeHtml(sched.action_service || 'turn_on')})</span>`;
       }
+
+      const jitterVal = parseInt(sched.random_jitter_minutes || 0, 10);
+      const jitterBadge = jitterVal > 0 ? `<span class="badge badge-warning" title="Simulation de présence"><ha-icon icon="mdi:dice-multiple-outline"></ha-icon> <span>±${jitterVal} min</span></span>` : "";
+      const vacMode = sched.vacation_mode || "always";
+      const vacBadge = vacMode === "only_vacation" ? `<span class="badge badge-info"><ha-icon icon="mdi:beach"></ha-icon> <span>Vacances uniq.</span></span>` : (vacMode === "exclude_vacation" ? `<span class="badge badge-disabled"><ha-icon icon="mdi:beach"></ha-icon> <span>Hors vacances</span></span>` : "");
+      const weatherMode = sched.weather_condition || "any";
+      const weatherBadge = weatherMode === "no_rain" ? `<span class="badge badge-info"><ha-icon icon="mdi:weather-cloudy"></ha-icon> <span>Hors pluie</span></span>` : (weatherMode === "sunny" ? `<span class="badge badge-warning"><ha-icon icon="mdi:weather-sunny"></ha-icon> <span>Ensoleillé</span></span>` : "");
+
+      // Frise chronologique 24h
+      let timelinePct = -1;
+      if (sched.time_type === "fixed" || !sched.time_type) {
+        const parts = (sched.time || "07:30").split(":");
+        const hh = parseInt(parts[0] || "7", 10);
+        const mm = parseInt(parts[1] || "30", 10);
+        timelinePct = Math.max(2, Math.min(98, Math.round(((hh * 60 + mm) / 1440) * 100)));
+      } else if (nextRun.includes("T")) {
+        const dt = new Date(nextRun);
+        if (!isNaN(dt.getTime())) {
+          timelinePct = Math.max(2, Math.min(98, Math.round(((dt.getHours() * 60 + dt.getMinutes()) / 1440) * 100)));
+        }
+      }
+      const timelineHtml = timelinePct >= 0 ? `
+        <div style="margin-top:8px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.05);">
+          <div style="display:flex; justify-content:space-between; font-size:9px; color:#64748b; margin-bottom:3px;">
+            <span>00h</span><span>06h</span><span>12h</span><span>18h</span><span>24h</span>
+          </div>
+          <div style="position:relative; height:6px; background:rgba(15,23,42,0.7); border-radius:4px; overflow:visible;">
+            <div style="position:absolute; left:${timelinePct}%; top:-3px; transform:translateX(-50%); width:12px; height:12px; border-radius:50%; background:#38bdf8; box-shadow:0 0 8px #38bdf8; border:2px solid #0f172a;"></div>
+          </div>
+        </div>
+      ` : "";
 
       return `
         <div class="card" data-id="${escapeHtml(sched.id)}" style="${isCompleted ? 'opacity: 0.65;' : ''}">
@@ -3665,6 +3789,9 @@
                 <h3 class="card-title">${escapeHtml(sched.name)}</h3>
                 <div style="margin-top: 6px; display:flex; gap:6px; flex-wrap:wrap;">
                   ${recurrenceBadge}
+                  ${jitterBadge}
+                  ${vacBadge}
+                  ${weatherBadge}
                   ${isCompleted ? '<span class="badge badge-disabled">Terminé</span>' : ''}
                 </div>
               </div>
@@ -3682,6 +3809,7 @@
                 ${!isCompleted && countdown ? `<span class="countdown-badge"><ha-icon icon="mdi:timer-sand"></ha-icon> ${countdown}</span>` : ''}
               </div>
               <div><span class="label">Jours Fériés :</span> ${escapeHtml(sched.holiday_mode || 'Actif')}</div>
+              ${timelineHtml}
             </div>
           </div>
           <div class="card-actions">
@@ -3697,8 +3825,22 @@
       const isEnabled = sched.enabled !== false;
       const state = (this._data.solar_states || {})[sched.id] || {};
       const statusBadge = state.should_shade ? 
-        `<span class="badge badge-warning"><ha-icon icon="mdi:weather-sunny"></ha-icon> <span>Fermé Solaire (${escapeHtml(String(sched.shading_position))}%)</span></span>` :
-        `<span class="badge badge-success"><ha-icon icon="mdi:weather-partly-cloudy"></ha-icon> <span>Ouvert (${escapeHtml(String(sched.open_position))}%)</span></span>`;
+        `<span class="badge badge-warning"><ha-icon icon="mdi:weather-sunny"></ha-icon> <span>Fermé Solaire (${escapeHtml(String(state.target_position !== undefined ? state.target_position : sched.shading_position))}%)</span></span>` :
+        `<span class="badge badge-success"><ha-icon icon="mdi:weather-partly-cloudy"></ha-icon> <span>Ouvert (${escapeHtml(String(state.target_position !== undefined ? state.target_position : sched.open_position))}%)</span></span>`;
+
+      const modeBadge = sched.mode === "winter"
+        ? `<span class="badge badge-info"><ha-icon icon="mdi:snowflake"></ha-icon> <span>Mode Hiver (Apport solaire)</span></span>`
+        : `<span class="badge badge-warning"><ha-icon icon="mdi:sunglasses"></ha-icon> <span>Mode Été (Anti-chaleur)</span></span>`;
+
+      const overrideBadge = state.manual_override
+        ? `<span class="badge badge-danger"><ha-icon icon="mdi:hand-back-right"></ha-icon> <span>Dérogation manuelle active</span></span>`
+        : "";
+      const windBadge = state.wind_alert
+        ? `<span class="badge badge-danger"><ha-icon icon="mdi:weather-windy"></ha-icon> <span>Sécurité Vent !</span></span>`
+        : "";
+      const windowBadge = state.window_is_open
+        ? `<span class="badge badge-info"><ha-icon icon="mdi:window-open-variant"></ha-icon> <span>Fenêtre ouverte (Ventilation)</span></span>`
+        : "";
 
       return `
         <div class="card" data-id="${escapeHtml(sched.id)}">
@@ -3706,7 +3848,13 @@
             <div class="card-header">
               <div>
                 <h3 class="card-title">${escapeHtml(sched.name)}</h3>
-                <div style="margin-top: 6px;">${statusBadge}</div>
+                <div style="margin-top: 6px; display:flex; gap:6px; flex-wrap:wrap;">
+                  ${statusBadge}
+                  ${modeBadge}
+                  ${overrideBadge}
+                  ${windBadge}
+                  ${windowBadge}
+                </div>
               </div>
               <label class="switch">
                 <input type="checkbox" class="toggle-schedule" ${isEnabled ? "checked" : ""}>
@@ -3718,7 +3866,15 @@
               <div><span class="label">Exposition Façade :</span> <strong>${escapeHtml(sched.orientation)} (${escapeHtml(state.facade_azimuth || '-')}°)</strong></div>
               <div><span class="label">Incidence Solaire :</span> ${state.incidence_angle !== undefined ? `${escapeHtml(state.incidence_angle)}°` : '-'}</div>
               <div><span class="label">Seuil Température :</span> ${escapeHtml(sched.temperature_threshold)}°C (Actuel: ${state.current_temp !== null && state.current_temp !== undefined ? `${escapeHtml(state.current_temp)}°C` : 'N/A'})</div>
+              ${sched.close_at_sunset ? `<div><span class="label">Fermeture Nocturne :</span> <span style="color:#a78bfa;">Active au coucher du soleil (${escapeHtml(String(sched.night_position || 0))}%)</span></div>` : ''}
               <div style="font-size: 11px; color: #94a3b8; margin-top: 6px;">${escapeHtml(state.reason || '')}</div>
+              ${state.manual_override ? `
+                <div style="margin-top: 8px;">
+                  <button type="button" class="btn btn-secondary clear-override-btn" style="padding: 6px 12px; font-size: 12px;">
+                    <ha-icon icon="mdi:autorenew"></ha-icon> <span>Reprendre l'automatisme</span>
+                  </button>
+                </div>
+              ` : ''}
             </div>
           </div>
           <div class="card-actions">
@@ -3802,10 +3958,20 @@
       let actDesc = "";
       if (act0.type === "delay") {
         actDesc = `Temporisation ${act0.duration || 1}s`;
+      } else if (act0.type === "domolink_gate" || act0.action === "domolink_gate") {
+        const gatesMap = (this._data && this._data.gates) ? this._data.gates : {};
+        const gId = act0.gate_id || (act0.target && act0.target.gate_id) || "gate_default";
+        const gName = (gatesMap[gId] && gatesMap[gId].name) || gId;
+        const opMap = { toggle: "Impulsion", open: "Ouvrir", close: "Fermer", pedestrian: "Piéton / Livreur", hold_open: "Maintenir ouvert", cancel_hold_open: "Fin maintien" };
+        const opLabel = opMap[act0.operation || act0.gate_operation] || act0.operation || "Impulsion";
+        actDesc = `🚪 <strong>${escapeHtml(gName)}</strong> ➔ <code>${escapeHtml(opLabel)}</code>`;
       } else {
         const actName = act0.action || act0.service || "Commande";
         const tgt = act0.target ? (act0.target.device_id || act0.target.entity_id || "") : (act0.target_value || "");
         actDesc = `⚡ ${escapeHtml(actName)} ➔ <code>${escapeHtml(tgt)}</code>`;
+      }
+      if (actions.length > 1) {
+        actDesc += ` <span class="badge badge-info" style="font-size:10px;padding:2px 6px;">+${actions.length - 1} étape(s)</span>`;
       }
 
       const lastTriggered = auto.last_triggered ? new Date(auto.last_triggered).toLocaleString("fr-FR") : "Jamais";
@@ -3943,11 +4109,19 @@
       modalEl.className = "modal-backdrop";
 
       const tr0 = (a.triggers && a.triggers[0]) || { type: "button", device_id: "", action: "any" };
-      const act0 = (a.actions && a.actions[0]) || { action: "switch.turn_on", target: { device_id: "", entity_id: "" } };
+      const act0 = (a.actions && a.actions[0]) || { type: "service", action: "switch.turn_on", target: { device_id: "", entity_id: "" } };
       const actTarget = act0.target || {};
+      const isGateAction = act0.type === "domolink_gate" || act0.action === "domolink_gate";
+      const gatesMap = (this._data && this._data.gates) ? this._data.gates : {};
+      const gatesList = Object.values(gatesMap);
+
+      const cond0 = (a.conditions && a.conditions[0]) || { type: "none" };
+      const hasSecondStep = a.actions && a.actions.length >= 3 && a.actions[1].type === "delay";
+      const delaySec = hasSecondStep ? (a.actions[1].duration || 5) : 0;
+      const act2 = hasSecondStep ? a.actions[2] : (a.actions && a.actions[1] && a.actions[1].type !== "delay" ? a.actions[1] : null);
 
       modalEl.innerHTML = `
-        <div class="modal-card" style="max-width: 680px;">
+        <div class="modal-card" style="max-width: 720px; max-height: 90vh; overflow-y: auto;">
           <div class="modal-header">
             <div style="display:flex; align-items:center; gap: 10px;">
               <ha-icon icon="mdi:lightning-bolt" style="color: #6366f1;"></ha-icon>
@@ -3957,6 +4131,25 @@
           </div>
 
           <div class="modal-body">
+            <!-- MODÈLES PRÊTS À L'EMPLOI (BLUEPRINTS) -->
+            <div style="background: rgba(99, 102, 241, 0.08); border: 1px dashed rgba(99, 102, 241, 0.35); border-radius: 10px; padding: 10px 12px; margin-bottom: 16px;">
+              <div style="font-size: 11px; font-weight: 700; color: #a5b4fc; text-transform: uppercase; margin-bottom: 8px; display:flex; align-items:center; gap:6px;">
+                <ha-icon icon="mdi:magic-staff" style="--mdc-icon-size:14px;"></ha-icon>
+                <span>Modèles Rapides (Blueprints DomoLink)</span>
+              </div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button type="button" class="btn btn-secondary bp-btn" data-bp="gate_remote" style="padding:5px 10px; font-size:11px;">
+                  🔘 Télécommande Zigbee ➔ Portail
+                </button>
+                <button type="button" class="btn btn-secondary bp-btn" data-bp="gate_pedestrian" style="padding:5px 10px; font-size:11px;">
+                  🚶 Double Clic ➔ Ouverture Piéton
+                </button>
+                <button type="button" class="btn btn-secondary bp-btn" data-bp="gate_night_light" style="padding:5px 10px; font-size:11px;">
+                  🌙 Ouverture Portail Nuit ➔ Éclairage
+                </button>
+              </div>
+            </div>
+
             <div class="form-group">
               <label>Nom de l'automatisation</label>
               <input type="text" class="form-control" id="auto-name" value="${escapeHtml(a.name || '')}" placeholder="Ex: Télécommande Portail Shelly">
@@ -3974,24 +4167,24 @@
               </div>
               <div class="form-group">
                 <label>Anti-rebond matériel (ms)</label>
-                <input type="number" class="form-control" id="auto-debounce" value="${escapeHtml(String(a.debounce_ms || 1000))}" step="100" min="0" max="10000" placeholder="1000">
+                <input type="number" class="form-control" id="auto-debounce" value="${escapeHtml(String(a.debounce_ms !== undefined ? a.debounce_ms : 1000))}" step="100" min="0" max="10000" placeholder="1000">
                 <div style="font-size:11px;color:#94a3b8;margin-top:4px;">Bloque les doubles clics parasites dans cet intervalle.</div>
               </div>
             </div>
 
-            <!-- SECTION DÉCLENCHEUR -->
+            <!-- SECTION 1 : DÉCLENCHEUR -->
             <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; margin: 16px 0;">
               <div style="font-weight: 700; color: #38bdf8; margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
                 <ha-icon icon="mdi:ray-start-arrow"></ha-icon>
-                <span>Déclencheur Principal (Trigger)</span>
+                <span>1. Déclencheur Principal (Trigger)</span>
               </div>
 
               <div class="form-group">
                 <label>Type de déclencheur</label>
                 <select class="form-control" id="auto-trigger-type">
-                  <option value="button" ${tr0.type === 'button' ? 'selected' : ''}>🔘 Bouton physique / Télécommande (Zigbee ZHA, Z2M)</option>
-                  <option value="state" ${tr0.type === 'state' ? 'selected' : ''}>📊 Changement d'état d'entité</option>
-                  <option value="numeric_state" ${tr0.type === 'numeric_state' ? 'selected' : ''}>📈 Seuil numérique (Capteur)</option>
+                  <option value="button" ${tr0.type === 'button' ? 'selected' : ''}>🔘 Bouton physique / Télécommande (Zigbee ZHA, Z2M, Shelly)</option>
+                  <option value="state" ${tr0.type === 'state' ? 'selected' : ''}>📊 Changement d'état d'entité (Capteur portail, mouvement...)</option>
+                  <option value="numeric_state" ${tr0.type === 'numeric_state' ? 'selected' : ''}>📈 Seuil numérique (Température, Luminosité, Vent...)</option>
                 </select>
               </div>
 
@@ -4034,35 +4227,172 @@
                   </div>
                 </div>
               </div>
+
+              <div id="section-auto-numeric" style="${tr0.type === 'numeric_state' ? '' : 'display:none;'}">
+                <div class="form-group">
+                  <label>Capteur numérique (sensor.*)</label>
+                  <input type="text" class="form-control" id="auto-num-entity" value="${escapeHtml(tr0.entity_id || '')}" placeholder="Ex: sensor.vitesse_vent">
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                  <div class="form-group">
+                    <label>Au-dessus de (Above)</label>
+                    <input type="number" step="0.5" class="form-control" id="auto-num-above" value="${escapeHtml(tr0.above !== undefined ? String(tr0.above) : '')}" placeholder="Ex: 40">
+                  </div>
+                  <div class="form-group">
+                    <label>En-dessous de (Below)</label>
+                    <input type="number" step="0.5" class="form-control" id="auto-num-below" value="${escapeHtml(tr0.below !== undefined ? String(tr0.below) : '')}" placeholder="Ex: 10">
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <!-- SECTION ACTION -->
+            <!-- SECTION 2 : CONDITIONS OPTIONNELLES -->
             <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; margin: 16px 0;">
-              <div style="font-weight: 700; color: #34d399; margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
-                <ha-icon icon="mdi:play-circle-outline"></ha-icon>
-                <span>Action à exécuter</span>
+              <div style="font-weight: 700; color: #a78bfa; margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
+                <ha-icon icon="mdi:filter-check-outline"></ha-icon>
+                <span>2. Condition de Filtrage (Optionnel)</span>
               </div>
 
               <div class="form-group">
-                <label>Action / Commande Home Assistant</label>
-                <select class="form-control" id="auto-act-service">
-                  <option value="switch.turn_on" ${(act0.action || act0.service) === 'switch.turn_on' ? 'selected' : ''}>⚡ Interrupteur : Allumer (switch.turn_on)</option>
-                  <option value="switch.turn_off" ${(act0.action || act0.service) === 'switch.turn_off' ? 'selected' : ''}>⚡ Interrupteur : Éteindre (switch.turn_off)</option>
-                  <option value="switch.toggle" ${(act0.action || act0.service) === 'switch.toggle' ? 'selected' : ''}>⚡ Interrupteur : Basculer (switch.toggle)</option>
-                  <option value="cover.open_cover" ${(act0.action || act0.service) === 'cover.open_cover' ? 'selected' : ''}>🚪 Portail / Volet : Ouvrir (cover.open_cover)</option>
-                  <option value="cover.close_cover" ${(act0.action || act0.service) === 'cover.close_cover' ? 'selected' : ''}>🚪 Portail / Volet : Fermer (cover.close_cover)</option>
-                  <option value="script.turn_on" ${(act0.action || act0.service) === 'script.turn_on' ? 'selected' : ''}>📜 Exécuter un Script (script.turn_on)</option>
+                <label>Condition requise pour autoriser l'exécution</label>
+                <select class="form-control" id="auto-cond-type">
+                  <option value="none" ${(!cond0.type || cond0.type === 'none') ? 'selected' : ''}>✅ Aucune condition (toujours autorisé)</option>
+                  <option value="sun" ${cond0.type === 'sun' ? 'selected' : ''}>🌙 / ☀️ Moment solaire (Nuit uniquement ou Jour uniquement)</option>
+                  <option value="time_window" ${cond0.type === 'time_window' ? 'selected' : ''}>🕒 Plage horaire (supporte le passage de minuit ex: 22:00 ➔ 06:00)</option>
+                  <option value="state" ${cond0.type === 'state' ? 'selected' : ''}>🔍 État d'une entité (ex: Alarme désarmée, Portail fermé...)</option>
+                  <option value="holiday" ${cond0.type === 'holiday' ? 'selected' : ''}>📅 Filtre Jours Fériés</option>
                 </select>
               </div>
 
-              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div id="cond-sec-sun" style="${cond0.type === 'sun' ? '' : 'display:none;'}">
                 <div class="form-group">
-                  <label>Identifiant Appareil (Device ID cible)</label>
-                  <input type="text" class="form-control" id="auto-act-device" value="${escapeHtml(actTarget.device_id || '')}" placeholder="Ex: 6a6b5cc7e4dcf6153eb1cb9c3fe4a721">
+                  <label>Période solaire</label>
+                  <select class="form-control" id="auto-cond-sun-mode">
+                    <option value="night" ${cond0.mode === 'night' ? 'selected' : ''}>🌙 Uniquement la Nuit (soleil couché)</option>
+                    <option value="day" ${cond0.mode === 'day' ? 'selected' : ''}>☀️ Uniquement le Jour (soleil levé)</option>
+                  </select>
                 </div>
+              </div>
+
+              <div id="cond-sec-time" style="${cond0.type === 'time_window' ? '' : 'display:none;'}">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                  <div class="form-group">
+                    <label>De (After)</label>
+                    <input type="time" class="form-control" id="auto-cond-after" value="${escapeHtml(cond0.after || '22:00')}">
+                  </div>
+                  <div class="form-group">
+                    <label>À (Before)</label>
+                    <input type="time" class="form-control" id="auto-cond-before" value="${escapeHtml(cond0.before || '06:00')}">
+                  </div>
+                </div>
+              </div>
+
+              <div id="cond-sec-state" style="${cond0.type === 'state' ? '' : 'display:none;'}">
+                <div style="display:grid; grid-template-columns: 2fr 1fr; gap:12px;">
+                  <div class="form-group">
+                    <label>Entité à vérifier</label>
+                    <input type="text" class="form-control" id="auto-cond-entity" value="${escapeHtml(cond0.entity_id || '')}" placeholder="Ex: binary_sensor.etat_du_portail">
+                  </div>
+                  <div class="form-group">
+                    <label>État attendu</label>
+                    <input type="text" class="form-control" id="auto-cond-state" value="${escapeHtml(cond0.state || 'on')}" placeholder="on / off">
+                  </div>
+                </div>
+              </div>
+
+              <div id="cond-sec-holiday" style="${cond0.type === 'holiday' ? '' : 'display:none;'}">
                 <div class="form-group">
-                  <label>Ou Entité cible (Entity ID)</label>
-                  <input type="text" class="form-control" id="auto-act-entity" value="${escapeHtml(actTarget.entity_id || '')}" placeholder="Ex: switch.shelly_ouverture_portail_voiture">
+                  <label>Comportement les jours fériés</label>
+                  <select class="form-control" id="auto-cond-holiday">
+                    <option value="exclude" ${cond0.mode === 'exclude' ? 'selected' : ''}>Bloquer les jours fériés</option>
+                    <option value="only_holidays" ${cond0.mode === 'only_holidays' ? 'selected' : ''}>Uniquement les jours fériés</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 3 : ACTION -->
+            <div style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; margin: 16px 0;">
+              <div style="font-weight: 700; color: #34d399; margin-bottom: 12px; display:flex; align-items:center; gap:8px;">
+                <ha-icon icon="mdi:play-circle-outline"></ha-icon>
+                <span>3. Action Principale à exécuter</span>
+              </div>
+
+              <div class="form-group">
+                <label>Type d'Action</label>
+                <select class="form-control" id="auto-act-service">
+                  <option value="domolink_gate" ${isGateAction ? 'selected' : ''}>🚪 Accès / Portail DomoLink (Ouverture, Piéton, Fermeture, Maintien...)</option>
+                  <option value="switch.turn_on" ${(!isGateAction && (act0.action || act0.service) === 'switch.turn_on') ? 'selected' : ''}>⚡ Interrupteur / Relais : Allumer (switch.turn_on)</option>
+                  <option value="switch.turn_off" ${(!isGateAction && (act0.action || act0.service) === 'switch.turn_off') ? 'selected' : ''}>⚡ Interrupteur / Relais : Éteindre (switch.turn_off)</option>
+                  <option value="switch.toggle" ${(!isGateAction && (act0.action || act0.service) === 'switch.toggle') ? 'selected' : ''}>⚡ Interrupteur / Relais : Basculer (switch.toggle)</option>
+                  <option value="light.turn_on" ${(!isGateAction && (act0.action || act0.service) === 'light.turn_on') ? 'selected' : ''}>💡 Lumière : Allumer (light.turn_on)</option>
+                  <option value="light.turn_off" ${(!isGateAction && (act0.action || act0.service) === 'light.turn_off') ? 'selected' : ''}>💡 Lumière : Éteindre (light.turn_off)</option>
+                  <option value="cover.open_cover" ${(!isGateAction && (act0.action || act0.service) === 'cover.open_cover') ? 'selected' : ''}>🪟 Volet : Ouvrir (cover.open_cover)</option>
+                  <option value="cover.close_cover" ${(!isGateAction && (act0.action || act0.service) === 'cover.close_cover') ? 'selected' : ''}>🪟 Volet : Fermer (cover.close_cover)</option>
+                  <option value="script.turn_on" ${(!isGateAction && (act0.action || act0.service) === 'script.turn_on') ? 'selected' : ''}>📜 Exécuter un Script (script.turn_on)</option>
+                </select>
+              </div>
+
+              <!-- Sous-section Portail DomoLink -->
+              <div id="section-auto-act-gate" style="${isGateAction ? '' : 'display:none;'}">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                  <div class="form-group">
+                    <label>Accès / Portail cible</label>
+                    <select class="form-control" id="auto-act-gate-id">
+                      ${gatesList.map(g => `<option value="${escapeHtml(g.id)}" ${(act0.gate_id || actTarget.gate_id) === g.id ? 'selected' : ''}>🚪 ${escapeHtml(g.name || g.id)}</option>`).join("")}
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Opération sur l'accès</label>
+                    <select class="form-control" id="auto-act-gate-op">
+                      <option value="toggle" ${(act0.operation || 'toggle') === 'toggle' ? 'selected' : ''}>⚡ Impulsion (Ouvrir / Stop / Fermer)</option>
+                      <option value="open" ${act0.operation === 'open' ? 'selected' : ''}>🔓 Ouvrir (sécurisé)</option>
+                      <option value="close" ${act0.operation === 'close' ? 'selected' : ''}>🔒 Fermer (sécurisé)</option>
+                      <option value="pedestrian" ${act0.operation === 'pedestrian' ? 'selected' : ''}>🚶 Mode Piéton / Livreur (ouverture partielle)</option>
+                      <option value="hold_open" ${act0.operation === 'hold_open' ? 'selected' : ''}>🔓 Maintenir ouvert (bloquer auto-close)</option>
+                      <option value="cancel_hold_open" ${act0.operation === 'cancel_hold_open' ? 'selected' : ''}>🔄 Désactiver le maintien ouvert</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Sous-section Service Standard -->
+              <div id="section-auto-act-std" style="${isGateAction ? 'display:none;' : ''}">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                  <div class="form-group">
+                    <label>Identifiant Appareil (Device ID cible)</label>
+                    <input type="text" class="form-control" id="auto-act-device" value="${escapeHtml(actTarget.device_id || '')}" placeholder="Ex: 6a6b5cc7e4dcf6153eb1cb9c3fe4a721">
+                  </div>
+                  <div class="form-group">
+                    <label>Ou Entité cible (Entity ID)</label>
+                    <input type="text" class="form-control" id="auto-act-entity" value="${escapeHtml(actTarget.entity_id || '')}" placeholder="Ex: switch.shelly_ouverture_portail_voiture">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Action secondaire / Temporisation -->
+              <div style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed rgba(255,255,255,0.1);">
+                <div style="font-size: 12px; font-weight: 600; color: #94a3b8; margin-bottom: 8px;">
+                  ⏱️ Séquence multi-étapes (Optionnel : Pause + 2ème action, ex: Éteindre lumière après X sec)
+                </div>
+                <div style="display:grid; grid-template-columns: 120px 1fr 1fr; gap: 10px;">
+                  <div class="form-group" style="margin:0;">
+                    <label style="font-size:11px;">Attente (sec)</label>
+                    <input type="number" min="0" max="3600" class="form-control" id="auto-delay-sec" value="${escapeHtml(String(delaySec))}" placeholder="0 = désactivé">
+                  </div>
+                  <div class="form-group" style="margin:0;">
+                    <label style="font-size:11px;">2ème Action</label>
+                    <select class="form-control" id="auto-act2-service">
+                      <option value="">-- Aucune --</option>
+                      <option value="light.turn_off" ${(act2 && act2.action === 'light.turn_off') ? 'selected' : ''}>💡 Éteindre lumière</option>
+                      <option value="switch.turn_off" ${(act2 && act2.action === 'switch.turn_off') ? 'selected' : ''}>⚡ Éteindre relais</option>
+                      <option value="light.turn_on" ${(act2 && act2.action === 'light.turn_on') ? 'selected' : ''}>💡 Allumer lumière</option>
+                    </select>
+                  </div>
+                  <div class="form-group" style="margin:0;">
+                    <label style="font-size:11px;">Entité 2ème action</label>
+                    <input type="text" class="form-control" id="auto-act2-entity" value="${escapeHtml((act2 && act2.target && act2.target.entity_id) || '')}" placeholder="Ex: light.cour">
+                  </div>
                 </div>
               </div>
             </div>
@@ -4083,14 +4413,71 @@
       modalEl.querySelector("#btn-close-auto-modal").addEventListener("click", () => modalEl.remove());
       modalEl.querySelector("#btn-cancel-auto-modal").addEventListener("click", () => modalEl.remove());
 
+      // Blueprints rapides
+      modalEl.querySelectorAll(".bp-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const bp = e.currentTarget.dataset.bp;
+          if (bp === "gate_remote") {
+            modalEl.querySelector("#auto-name").value = "Télécommande Zigbee ➔ Ouverture Portail";
+            modalEl.querySelector("#auto-trigger-type").value = "button";
+            modalEl.querySelector("#auto-btn-device").value = "dbe1f8c50e85cbfe2b760c5915445a21";
+            modalEl.querySelector("#auto-btn-action").value = "any";
+            modalEl.querySelector("#auto-act-service").value = "domolink_gate";
+            modalEl.querySelector("#auto-act-gate-op").value = "toggle";
+          } else if (bp === "gate_pedestrian") {
+            modalEl.querySelector("#auto-name").value = "Double Clic ➔ Mode Piéton / Livreur";
+            modalEl.querySelector("#auto-trigger-type").value = "button";
+            modalEl.querySelector("#auto-btn-device").value = "dbe1f8c50e85cbfe2b760c5915445a21";
+            modalEl.querySelector("#auto-btn-action").value = "double";
+            modalEl.querySelector("#auto-act-service").value = "domolink_gate";
+            modalEl.querySelector("#auto-act-gate-op").value = "pedestrian";
+          } else if (bp === "gate_night_light") {
+            modalEl.querySelector("#auto-name").value = "Portail ouvert la Nuit ➔ Éclairage Allée";
+            modalEl.querySelector("#auto-trigger-type").value = "state";
+            modalEl.querySelector("#auto-state-entity").value = "binary_sensor.etat_du_portail";
+            modalEl.querySelector("#auto-state-to").value = "on";
+            modalEl.querySelector("#auto-cond-type").value = "sun";
+            modalEl.querySelector("#auto-cond-sun-mode").value = "night";
+            modalEl.querySelector("#auto-act-service").value = "light.turn_on";
+            modalEl.querySelector("#auto-delay-sec").value = "180";
+            modalEl.querySelector("#auto-act2-service").value = "light.turn_off";
+          }
+          modalEl.querySelector("#auto-trigger-type").dispatchEvent(new Event("change"));
+          modalEl.querySelector("#auto-cond-type").dispatchEvent(new Event("change"));
+          modalEl.querySelector("#auto-act-service").dispatchEvent(new Event("change"));
+        });
+      });
+
       // Changement de type de déclencheur
       const trSelect = modalEl.querySelector("#auto-trigger-type");
       trSelect.addEventListener("change", (e) => {
         const val = e.currentTarget.value;
         const secBtn = modalEl.querySelector("#section-auto-btn");
         const secSt = modalEl.querySelector("#section-auto-state");
+        const secNum = modalEl.querySelector("#section-auto-numeric");
         if (secBtn) secBtn.style.display = val === "button" ? "" : "none";
         if (secSt) secSt.style.display = val === "state" ? "" : "none";
+        if (secNum) secNum.style.display = val === "numeric_state" ? "" : "none";
+      });
+
+      // Changement de condition
+      const condSelect = modalEl.querySelector("#auto-cond-type");
+      condSelect.addEventListener("change", (e) => {
+        const val = e.currentTarget.value;
+        modalEl.querySelector("#cond-sec-sun").style.display = val === "sun" ? "" : "none";
+        modalEl.querySelector("#cond-sec-time").style.display = val === "time_window" ? "" : "none";
+        modalEl.querySelector("#cond-sec-state").style.display = val === "state" ? "" : "none";
+        modalEl.querySelector("#cond-sec-holiday").style.display = val === "holiday" ? "" : "none";
+      });
+
+      // Changement de type d'action
+      const actSelect = modalEl.querySelector("#auto-act-service");
+      actSelect.addEventListener("change", (e) => {
+        const val = e.currentTarget.value;
+        const secGate = modalEl.querySelector("#section-auto-act-gate");
+        const secStd = modalEl.querySelector("#section-auto-act-std");
+        if (secGate) secGate.style.display = val === "domolink_gate" ? "" : "none";
+        if (secStd) secStd.style.display = val === "domolink_gate" ? "none" : "";
       });
 
       // Bouton Sniffer (Capturer l'appui en direct)
@@ -4114,7 +4501,7 @@
               if (data.event) {
                 clearInterval(pollInterval);
                 btnSniff.disabled = false;
-                const devId = data.event.event_data?.device_id || data.event.event_data?.device_ieee || "";
+                const devId = data.event.event_data?.device_id || data.event.event_data?.device_ieee || data.event.event_data?.entity_id || "";
                 modalEl.querySelector("#auto-btn-device").value = devId;
                 sniffStatus.innerHTML = `✅ Bouton capturé avec succès ! (Device: <strong>${escapeHtml(devId)}</strong>)`;
               } else if (!data.active) {
@@ -4137,10 +4524,10 @@
           name: modalEl.querySelector("#auto-name").value.trim() || "Automatisation",
           enabled: true,
           mode: modalEl.querySelector("#auto-mode").value,
-          debounce_ms: parseInt(modalEl.querySelector("#auto-debounce").value, 10) || 1000,
+          debounce_ms: parseInt(modalEl.querySelector("#auto-debounce").value, 10) || 0,
           condition_mode: "and",
           triggers: [],
-          conditions: a.conditions || [],
+          conditions: [],
           actions: [],
         };
 
@@ -4158,20 +4545,76 @@
             from: modalEl.querySelector("#auto-state-from").value.trim() || undefined,
             to: modalEl.querySelector("#auto-state-to").value.trim() || "on",
           });
+        } else if (tType === "numeric_state") {
+          const numTrig = {
+            type: "numeric_state",
+            entity_id: modalEl.querySelector("#auto-num-entity").value.trim(),
+          };
+          const abv = modalEl.querySelector("#auto-num-above").value.trim();
+          const blw = modalEl.querySelector("#auto-num-below").value.trim();
+          if (abv !== "") numTrig.above = parseFloat(abv);
+          if (blw !== "") numTrig.below = parseFloat(blw);
+          autoData.triggers.push(numTrig);
+        }
+
+        // Conditions
+        const cType = modalEl.querySelector("#auto-cond-type").value;
+        if (cType === "sun") {
+          autoData.conditions.push({
+            type: "sun",
+            mode: modalEl.querySelector("#auto-cond-sun-mode").value,
+          });
+        } else if (cType === "time_window") {
+          autoData.conditions.push({
+            type: "time_window",
+            after: modalEl.querySelector("#auto-cond-after").value || "22:00",
+            before: modalEl.querySelector("#auto-cond-before").value || "06:00",
+          });
+        } else if (cType === "state") {
+          autoData.conditions.push({
+            type: "state",
+            entity_id: modalEl.querySelector("#auto-cond-entity").value.trim(),
+            state: modalEl.querySelector("#auto-cond-state").value.trim() || "on",
+          });
+        } else if (cType === "holiday") {
+          autoData.conditions.push({
+            type: "holiday",
+            mode: modalEl.querySelector("#auto-cond-holiday").value,
+          });
         }
 
         const actService = modalEl.querySelector("#auto-act-service").value;
-        const actDevice = modalEl.querySelector("#auto-act-device").value.trim();
-        const actEntity = modalEl.querySelector("#auto-act-entity").value.trim();
+        if (actService === "domolink_gate") {
+          autoData.actions.push({
+            type: "domolink_gate",
+            gate_id: modalEl.querySelector("#auto-act-gate-id").value || "gate_default",
+            operation: modalEl.querySelector("#auto-act-gate-op").value || "toggle",
+          });
+        } else {
+          const actDevice = modalEl.querySelector("#auto-act-device").value.trim();
+          const actEntity = modalEl.querySelector("#auto-act-entity").value.trim();
+          const actObj = {
+            type: "service",
+            action: actService,
+            target: {},
+          };
+          if (actDevice) actObj.target.device_id = actDevice;
+          if (actEntity) actObj.target.entity_id = actEntity;
+          autoData.actions.push(actObj);
+        }
 
-        const actObj = {
-          type: "service",
-          action: actService,
-          target: {},
-        };
-        if (actDevice) actObj.target.device_id = actDevice;
-        if (actEntity) actObj.target.entity_id = actEntity;
-        autoData.actions.push(actObj);
+        // Séquence secondaire optionnelle
+        const dSec = parseInt(modalEl.querySelector("#auto-delay-sec").value || "0", 10);
+        const act2Svc = modalEl.querySelector("#auto-act2-service").value;
+        const act2Ent = modalEl.querySelector("#auto-act2-entity").value.trim();
+        if (dSec > 0 && act2Svc && act2Ent) {
+          autoData.actions.push({ type: "delay", duration: dSec });
+          autoData.actions.push({
+            type: "service",
+            action: act2Svc,
+            target: { entity_id: act2Ent },
+          });
+        }
 
         await this._hass.fetchWithAuth("/api/domolink_planification/save_automation", {
           method: "POST",
@@ -4626,11 +5069,20 @@
               </div>
             </div>
 
-            <div class="form-group">
-              <label>Exposition de la façade / fenêtre</label>
-              <select class="form-control" id="modal-orientation">
-                ${COMPASS_OPTIONS.map(opt => `<option value="${opt.val}" ${opt.val === s.orientation ? 'selected' : ''}>${opt.label}</option>`).join("")}
-              </select>
+            <div style="display: flex; gap: 12px;">
+              <div class="form-group" style="flex:1;">
+                <label>Exposition de la façade / fenêtre</label>
+                <select class="form-control" id="modal-orientation">
+                  ${COMPASS_OPTIONS.map(opt => `<option value="${opt.val}" ${opt.val === s.orientation ? 'selected' : ''}>${opt.label}</option>`).join("")}
+                </select>
+              </div>
+              <div class="form-group" style="flex:1;">
+                <label>Mode Saison</label>
+                <select class="form-control" id="modal-solar-mode">
+                  <option value="summer" ${s.mode !== 'winter' ? 'selected' : ''}>☀️ Mode Été (Ferme si soleil + chaud)</option>
+                  <option value="winter" ${s.mode === 'winter' ? 'selected' : ''}>❄️ Mode Hiver (Ouvre au soleil gratuit)</option>
+                </select>
+              </div>
             </div>
 
             <div class="form-group">
@@ -4658,12 +5110,11 @@
               </div>
             </div>
 
-            <div class="form-group">
-              <label>Seuil de Température déclencheur (°C)</label>
-              <input type="number" step="0.5" class="form-control" id="modal-temp-thresh" value="${escapeHtml(s.temperature_threshold || 24)}">
-            </div>
-
             <div style="display: flex; gap: 12px;">
+              <div class="form-group" style="flex:1;">
+                <label>Seuil de Température (°C)</label>
+                <input type="number" step="0.5" class="form-control" id="modal-temp-thresh" value="${escapeHtml(s.temperature_threshold || 24)}">
+              </div>
               <div class="form-group" style="flex:1;">
                 <label>Position Fermeture Solaire (%)</label>
                 <input type="number" min="0" max="100" class="form-control" id="modal-pos-shading" value="${escapeHtml(s.shading_position !== undefined ? s.shading_position : 20)}">
@@ -4671,6 +5122,38 @@
               <div class="form-group" style="flex:1;">
                 <label>Position Réouverture (%)</label>
                 <input type="number" min="0" max="100" class="form-control" id="modal-pos-open" value="${escapeHtml(s.open_position !== undefined ? s.open_position : 100)}">
+              </div>
+            </div>
+
+            <!-- Options intelligentes Volets Solaires (Pilier 2) -->
+            <div style="background: rgba(15,23,42,0.45); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px; margin-top: 8px;">
+              <div style="font-size:12px; font-weight:700; color:#38bdf8; margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+                <ha-icon icon="mdi:shield-sun-outline" style="--mdc-icon-size:16px;"></ha-icon>
+                <span>Sécurités & Confort Avancé (Dérogation, Vent, Aération, Nuit)</span>
+              </div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group" style="margin:0;">
+                  <label style="font-size:11px;">Pause sur action manuelle (min)</label>
+                  <input type="number" min="0" max="1440" class="form-control" id="modal-solar-override" value="${escapeHtml(String(s.manual_override_minutes !== undefined ? s.manual_override_minutes : 120))}">
+                </div>
+                <div class="form-group" style="margin:0;">
+                  <label style="font-size:11px;">Seuil Sécurité Vent km/h (0 = inactif)</label>
+                  <input type="number" min="0" max="200" class="form-control" id="modal-solar-wind" value="${escapeHtml(String(s.wind_speed_threshold || 0))}">
+                </div>
+                <div class="form-group" style="margin:0;">
+                  <label style="font-size:11px;">Capteur Fenêtre Ouverte (optionnel)</label>
+                  <input type="text" class="form-control" id="modal-solar-window" value="${escapeHtml(s.window_sensor_entity || '')}" placeholder="Ex: binary_sensor.fenetre_salon">
+                </div>
+                <div class="form-group" style="margin:0;">
+                  <label style="font-size:11px;">Position min. si fenêtre ouverte (%)</label>
+                  <input type="number" min="0" max="100" class="form-control" id="modal-solar-win-pos" value="${escapeHtml(String(s.window_open_min_pos !== undefined ? s.window_open_min_pos : 30))}">
+                </div>
+              </div>
+              <div style="margin-top: 10px; display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" id="modal-solar-sunset" ${s.close_at_sunset ? 'checked' : ''} style="width:16px;height:16px;">
+                <label for="modal-solar-sunset" style="margin:0; font-size:12px; color:#e2e8f0; cursor:pointer;">
+                  🌙 Fermer automatiquement à 0% au coucher du soleil (Verrouillage nocturne)
+                </label>
               </div>
             </div>
           ` : `
@@ -4695,6 +5178,13 @@
                   <input type="number" class="form-control" id="modal-solar-offset" value="${escapeHtml(s.solar_offset_minutes !== undefined ? s.solar_offset_minutes : 0)}" step="5" style="max-width: 120px;">
                   <span style="font-size:12px; color:#94a3b8;">(- avant, + après)</span>
                 </div>
+              </div>
+
+              <!-- Simulation de présence (Jitter aléatoire) -->
+              <div style="display:flex; align-items:center; gap: 10px; margin-top: 10px; background: rgba(15,23,42,0.35); padding: 8px 12px; border-radius: 8px;">
+                <ha-icon icon="mdi:dice-multiple-outline" style="color:#f59e0b; --mdc-icon-size:18px;"></ha-icon>
+                <label style="margin:0; font-size:12px; color:#cbd5e1; flex:1;">Simulation de présence (Variation aléatoire ± minutes) :</label>
+                <input type="number" min="0" max="60" step="5" class="form-control" id="modal-random-jitter" value="${escapeHtml(String(s.random_jitter_minutes || 0))}" style="max-width: 85px;">
               </div>
 
               <div id="section-zone-trigger" style="${(s.time_type === 'zone_enter' || s.time_type === 'zone_leave') ? '' : 'display:none;'}">
@@ -4839,6 +5329,7 @@
             <div class="form-group">
               <label>Type de Cible</label>
               <select class="form-control" id="modal-target-type">
+                <option value="domolink_gate" ${s.target_type === 'domolink_gate' ? 'selected' : ''}>🚪 Accès / Portail DomoLink</option>
                 <option value="label" ${s.target_type === 'label' ? 'selected' : ''}>🏷️ Étiquette (Label HA)</option>
                 <option value="entity" ${s.target_type === 'entity' ? 'selected' : ''}>💡 Entité spécifique</option>
                 <option value="area" ${s.target_type === 'area' ? 'selected' : ''}>🏠 Pièce (Area)</option>
@@ -4849,15 +5340,38 @@
               </select>
             </div>
 
+            <!-- Section Accès DomoLink -->
+            <div id="section-gate-target" style="${s.target_type === 'domolink_gate' ? '' : 'display:none;'}">
+              <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                  <label>Accès / Portail concerné</label>
+                  <select class="form-control" id="modal-gate-id">
+                    ${Object.values((this._data && this._data.gates) || {}).map(g => `<option value="${escapeHtml(g.id)}" ${s.target_value === g.id ? 'selected' : ''}>🚪 ${escapeHtml(g.name || g.id)}</option>`).join("")}
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Action sur l'accès</label>
+                  <select class="form-control" id="modal-gate-op">
+                    <option value="open" ${(s.gate_operation || s.action_service) === 'open' ? 'selected' : ''}>🔓 Ouvrir (sécurisé)</option>
+                    <option value="close" ${(s.gate_operation || s.action_service) === 'close' ? 'selected' : ''}>🔒 Fermer (sécurisé)</option>
+                    <option value="pedestrian" ${(s.gate_operation || s.action_service) === 'pedestrian' ? 'selected' : ''}>🚶 Mode Piéton / Livreur</option>
+                    <option value="hold_open" ${(s.gate_operation || s.action_service) === 'hold_open' ? 'selected' : ''}>🔓 Maintenir ouvert</option>
+                    <option value="cancel_hold_open" ${(s.gate_operation || s.action_service) === 'cancel_hold_open' ? 'selected' : ''}>🔄 Désactiver maintien ouvert</option>
+                    <option value="toggle" ${(s.gate_operation || s.action_service) === 'toggle' ? 'selected' : ''}>⚡ Impulsion simple</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
             <!-- Cible Standard -->
-            <div id="section-standard-target" style="${s.target_type === 'reminder' ? 'display:none;' : ''}">
+            <div id="section-standard-target" style="${(s.target_type === 'reminder' || s.target_type === 'domolink_gate') ? 'display:none;' : ''}">
               <div class="form-group" id="group-target-val">
                 <label id="label-target-val">Cible</label>
                 <div class="ac-wrapper" id="ac-target-wrapper">
                   <div class="ac-input-group">
                     <input type="text" class="form-control ac-input" id="modal-target-val" 
                            placeholder="Saisissez ou recherchez la cible..." 
-                           value="${escapeHtml(s.target_type !== 'reminder' ? (s.target_value || '') : '')}" autocomplete="off">
+                           value="${escapeHtml((s.target_type !== 'reminder' && s.target_type !== 'domolink_gate') ? (s.target_value || '') : '')}" autocomplete="off">
                     <div class="ac-controls">
                       <button type="button" class="ac-btn ac-clear-btn" title="Effacer la saisie">✕</button>
                       <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste">▼</button>
@@ -4865,7 +5379,7 @@
                   </div>
                   <div class="ac-dropdown" id="ac-target-dropdown"></div>
                 </div>
-                <div class="ac-selection-hint" id="ac-target-hint" style="${s.target_value && s.target_type !== 'reminder' ? '' : 'display:none;'}">
+                <div class="ac-selection-hint" id="ac-target-hint" style="${s.target_value && s.target_type !== 'reminder' && s.target_type !== 'domolink_gate' ? '' : 'display:none;'}">
                   ${s.target_value && states[s.target_value] ? `
                     Sélectionné : <strong>${escapeHtml(states[s.target_value].attributes?.friendly_name || s.target_value)}</strong>
                   ` : ''}
@@ -4900,14 +5414,32 @@
               </div>
             </div>
 
-            <div class="form-group">
-              <label>Gestion des Jours Fériés</label>
-              <select class="form-control" id="modal-holiday-mode">
-                <option value="always" ${s.holiday_mode === 'always' ? 'selected' : ''}>Actif tous les jours</option>
-                <option value="exclude" ${s.holiday_mode === 'exclude' ? 'selected' : ''}>Ne pas exécuter les jours fériés</option>
-                <option value="weekend" ${s.holiday_mode === 'weekend' ? 'selected' : ''}>Comportement Week-end les jours fériés</option>
-                <option value="only_holidays" ${s.holiday_mode === 'only_holidays' ? 'selected' : ''}>Uniquement les jours fériés</option>
-              </select>
+            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+              <div class="form-group">
+                <label style="font-size:12px;">Jours Fériés</label>
+                <select class="form-control" id="modal-holiday-mode">
+                  <option value="always" ${s.holiday_mode === 'always' ? 'selected' : ''}>Actif tous les jours</option>
+                  <option value="exclude" ${s.holiday_mode === 'exclude' ? 'selected' : ''}>Sauf jours fériés</option>
+                  <option value="weekend" ${s.holiday_mode === 'weekend' ? 'selected' : ''}>Mode Week-end</option>
+                  <option value="only_holidays" ${s.holiday_mode === 'only_holidays' ? 'selected' : ''}>Fériés uniq.</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label style="font-size:12px;">Mode Vacances</label>
+                <select class="form-control" id="modal-vacation-mode">
+                  <option value="always" ${(s.vacation_mode || 'always') === 'always' ? 'selected' : ''}>Toujours actif</option>
+                  <option value="exclude_vacation" ${s.vacation_mode === 'exclude_vacation' ? 'selected' : ''}>Suspendu en vacances</option>
+                  <option value="only_vacation" ${s.vacation_mode === 'only_vacation' ? 'selected' : ''}>Uniquement en vacances</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label style="font-size:12px;">Condition Météo</label>
+                <select class="form-control" id="modal-weather-cond">
+                  <option value="any" ${(s.weather_condition || 'any') === 'any' ? 'selected' : ''}>Peu importe la météo</option>
+                  <option value="no_rain" ${s.weather_condition === 'no_rain' ? 'selected' : ''}>Hors pluie / orage</option>
+                  <option value="sunny" ${s.weather_condition === 'sunny' ? 'selected' : ''}>Temps ensoleillé uniq.</option>
+                </select>
+              </div>
             </div>
           `}
 
@@ -5057,17 +5589,24 @@
           });
         }
 
-        // 4. Bascule Type de Cible (Standard vs Rappel Multi-canal)
+        // 4. Bascule Type de Cible (Standard vs Rappel Multi-canal vs Portail DomoLink)
         modalEl.querySelector("#modal-target-type")?.addEventListener("change", (e) => {
           const val = e.target.value;
           const secStd = modalEl.querySelector("#section-standard-target");
           const secRem = modalEl.querySelector("#section-reminder-target");
+          const secGate = modalEl.querySelector("#section-gate-target");
           if (val === "reminder") {
             if (secStd) secStd.style.display = "none";
             if (secRem) secRem.style.display = "";
+            if (secGate) secGate.style.display = "none";
+          } else if (val === "domolink_gate") {
+            if (secStd) secStd.style.display = "none";
+            if (secRem) secRem.style.display = "none";
+            if (secGate) secGate.style.display = "";
           } else {
             if (secStd) secStd.style.display = "";
             if (secRem) secRem.style.display = "none";
+            if (secGate) secGate.style.display = "none";
             setupTargetAc();
           }
         });
@@ -5102,10 +5641,16 @@
         if (isSolar) {
           s.cover_entity_id = modalEl.querySelector("#modal-cover-id").value.trim();
           s.orientation = modalEl.querySelector("#modal-orientation").value;
+          s.mode = modalEl.querySelector("#modal-solar-mode")?.value || "summer";
           s.temperature_sensor_id = modalEl.querySelector("#modal-temp-sensor").value.trim();
           s.temperature_threshold = parseFloat(modalEl.querySelector("#modal-temp-thresh").value);
           s.shading_position = parseInt(modalEl.querySelector("#modal-pos-shading").value, 10);
           s.open_position = parseInt(modalEl.querySelector("#modal-pos-open").value, 10);
+          s.manual_override_minutes = parseInt(modalEl.querySelector("#modal-solar-override")?.value || "120", 10);
+          s.wind_speed_threshold = parseFloat(modalEl.querySelector("#modal-solar-wind")?.value || "0");
+          s.window_sensor_entity = modalEl.querySelector("#modal-solar-window")?.value.trim() || "";
+          s.window_open_min_pos = parseInt(modalEl.querySelector("#modal-solar-win-pos")?.value || "30", 10);
+          s.close_at_sunset = Boolean(modalEl.querySelector("#modal-solar-sunset")?.checked);
         } else {
           // Time type & offset / zone
           const activeTimeBtn = modalEl.querySelector("#ctrl-time-type .segmented-btn.active");
@@ -5118,6 +5663,7 @@
             s.zone_person_id = modalEl.querySelector("#modal-zone-person").value.trim() || "any";
             s.zone_id = modalEl.querySelector("#modal-zone-id").value.trim() || "zone.home";
           }
+          s.random_jitter_minutes = parseInt(modalEl.querySelector("#modal-random-jitter")?.value || "0", 10);
 
           // Recurrence mode
           const activeRecBtn = modalEl.querySelector("#ctrl-recurrence-mode .segmented-btn.active");
@@ -5157,6 +5703,14 @@
               channel: s.reminder_channel,
               message: s.reminder_message
             };
+          } else if (s.target_type === "domolink_gate") {
+            s.target_value = modalEl.querySelector("#modal-gate-id")?.value || "gate_default";
+            s.gate_operation = modalEl.querySelector("#modal-gate-op")?.value || "open";
+            s.action_service = s.gate_operation;
+            s.action_data = {
+              gate_id: s.target_value,
+              operation: s.gate_operation
+            };
           } else {
             s.target_value = modalEl.querySelector("#modal-target-val").value.trim();
             s.action_service = modalEl.querySelector("#modal-action-service").value;
@@ -5166,6 +5720,8 @@
           }
 
           s.holiday_mode = modalEl.querySelector("#modal-holiday-mode").value;
+          s.vacation_mode = modalEl.querySelector("#modal-vacation-mode")?.value || "always";
+          s.weather_condition = modalEl.querySelector("#modal-weather-cond")?.value || "any";
         }
         this._saveScheduleFromModal();
       });

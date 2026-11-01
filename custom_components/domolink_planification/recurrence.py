@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
+import hashlib
 from typing import Any
 
 try:
@@ -39,6 +40,23 @@ except (ImportError, ValueError):
 
 class RecurrenceEngine:
     """Moteur pur Python de calcul et de vérification des dates de déclenchement."""
+
+    @staticmethod
+    def get_daily_jitter_minutes(sched: dict[str, Any], target_date: date) -> int:
+        """Calcule un décalage aléatoire déterministe par jour (Simulation de présence)."""
+        raw_jitter = sched.get("random_jitter_minutes", 0)
+        try:
+            max_jitter = int(raw_jitter or 0)
+        except (ValueError, TypeError):
+            return 0
+        if max_jitter <= 0:
+            return 0
+        sched_id = str(sched.get("id") or sched.get("name") or "default")
+        seed_str = f"{sched_id}:{target_date.isoformat()}"
+        digest = hashlib.md5(seed_str.encode("utf-8")).hexdigest()
+        val = int(digest[:8], 16)
+        span = (2 * max_jitter) + 1
+        return (val % span) - max_jitter
 
     @staticmethod
     def check_date_match(sched: dict[str, Any], now: datetime) -> bool:
@@ -84,7 +102,7 @@ class RecurrenceEngine:
 
     @staticmethod
     def check_trigger_match(sched: dict[str, Any], now: datetime, sun_target_time: datetime | None = None) -> bool:
-        """Vérifie si la date et l'heure courantes correspondent à la planification."""
+        """Vérifie si la date et l'heure courantes correspondent à la planification (incluant le décalage aléatoire)."""
         time_type = sched.get("time_type", TIME_TYPE_FIXED)
         trigger_type = sched.get("trigger_type", TRIGGER_TYPE_TIME)
 
@@ -92,17 +110,22 @@ class RecurrenceEngine:
         if time_type in (TIME_TYPE_ZONE_ENTER, TIME_TYPE_ZONE_LEAVE):
             return False
 
+        jitter_min = RecurrenceEngine.get_daily_jitter_minutes(sched, now.date())
+
         # 1. Vérification de l'heure
         if time_type in (TIME_TYPE_SUNRISE, TIME_TYPE_SUNSET) or trigger_type == TRIGGER_TYPE_SOLAR:
             if not sun_target_time:
                 return False
-            if now.hour != sun_target_time.hour or now.minute != sun_target_time.minute:
+            effective_sun_time = sun_target_time + timedelta(minutes=jitter_min)
+            if now.hour != effective_sun_time.hour or now.minute != effective_sun_time.minute:
                 return False
         else:
             time_str = sched.get("time", "00:00")
             try:
                 target_h, target_m = [int(p) for p in time_str.split(":")[:2]]
-                if now.hour != target_h or now.minute != target_m:
+                base_dt = now.replace(hour=target_h, minute=target_m, second=0, microsecond=0)
+                effective_dt = base_dt + timedelta(minutes=jitter_min)
+                if now.hour != effective_dt.hour or now.minute != effective_dt.minute:
                     return False
             except Exception:
                 return False
@@ -137,18 +160,20 @@ class RecurrenceEngine:
 
         def _get_candidate_dt(day_offset: int) -> datetime:
             target_date_dt = now + timedelta(days=day_offset)
+            jitter_min = RecurrenceEngine.get_daily_jitter_minutes(sched, target_date_dt.date())
             if is_solar:
                 if callable(sun_times_resolver):
                     try:
                         event_dt = sun_times_resolver(solar_event, target_date_dt.date())
                         if event_dt is not None:
-                            return (event_dt + timedelta(minutes=offset_minutes)).replace(second=0, microsecond=0)
+                            return (event_dt + timedelta(minutes=offset_minutes + jitter_min)).replace(second=0, microsecond=0)
                     except Exception:
                         pass
                 default_h, default_m = (7, 0) if solar_event == "sunrise" else (19, 0)
                 base_dt = target_date_dt.replace(hour=default_h, minute=default_m, second=0, microsecond=0)
-                return base_dt + timedelta(minutes=offset_minutes)
-            return target_date_dt.replace(hour=h, minute=m, second=0, microsecond=0)
+                return base_dt + timedelta(minutes=offset_minutes + jitter_min)
+            base_fixed = target_date_dt.replace(hour=h, minute=m, second=0, microsecond=0)
+            return base_fixed + timedelta(minutes=jitter_min)
 
         rec_mode = sched.get("recurrence_mode", RECURRENCE_EVERY)
 
@@ -191,4 +216,3 @@ class RecurrenceEngine:
             return None
 
         return None
-

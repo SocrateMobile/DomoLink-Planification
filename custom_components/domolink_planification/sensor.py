@@ -27,6 +27,7 @@ async def async_setup_entry(
     """Configure les entités sensor depuis une ConfigEntry."""
     coordinator: DomolinkPlanificationCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     added_ids: set[str] = set()
+    added_gate_ids: set[str] = {"gate_1"}
 
     # Capteurs globaux
     global_entities = [
@@ -41,11 +42,19 @@ async def async_setup_entry(
     @callback
     def _update_entities() -> None:
         schedules = coordinator.storage.get_schedules()
-        new_sensors = []
+        new_sensors: list[SensorEntity] = []
         for sched_id in schedules:
             if sched_id not in added_ids:
                 added_ids.add(sched_id)
                 new_sensors.append(PlanificationNextRunSensor(coordinator, entry, sched_id))
+
+        gates = coordinator.storage.get_gates()
+        for gate_id in gates:
+            if gate_id not in added_gate_ids:
+                added_gate_ids.add(gate_id)
+                new_sensors.append(GateStatusSensor(coordinator, entry, gate_id=gate_id))
+                new_sensors.append(GateCountdownSensor(coordinator, entry, gate_id=gate_id))
+
         if new_sensors:
             async_add_entities(new_sensors)
 
@@ -189,26 +198,48 @@ class PlanificationLastActionSensor(CoordinatorEntity[DomolinkPlanificationCoord
 
 
 class GateStatusSensor(CoordinatorEntity[DomolinkPlanificationCoordinator], SensorEntity):
-    """Capteur d'état du portail (fermé, ouvert, fermeture en cours, obstacle, maintien)."""
+    """Capteur d'état d'un accès (fermé, ouvert, fermeture en cours, obstacle, maintien)."""
 
     _attr_has_entity_name = True
-    _attr_name = "Portail Statut"
     _attr_icon = "mdi:gate"
 
-    def __init__(self, coordinator: DomolinkPlanificationCoordinator, entry: ConfigEntry) -> None:
+    def __init__(
+        self,
+        coordinator: DomolinkPlanificationCoordinator,
+        entry: ConfigEntry,
+        gate_id: str | None = None,
+    ) -> None:
         super().__init__(coordinator)
         self.entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_gate_status_sensor"
+        self.gate_id = gate_id
+        if gate_id and gate_id != "gate_1":
+            self._attr_unique_id = f"{entry.entry_id}_{gate_id}_status_sensor"
+        else:
+            self._attr_unique_id = f"{entry.entry_id}_gate_status_sensor"
+
+    @property
+    def _gate_info(self) -> dict[str, Any]:
+        data = self.coordinator.data or {}
+        if self.gate_id and self.gate_id in data.get("gates", {}):
+            return data["gates"][self.gate_id]
+        return data.get("gate", {})
+
+    @property
+    def name(self) -> str:
+        if self.gate_id and self.gate_id != "gate_1":
+            g_name = self._gate_info.get("name", self.gate_id)
+            return f"{g_name} Statut"
+        return "Portail Statut"
 
     @property
     def native_value(self) -> str:
-        gate_info = (self.coordinator.data or {}).get("gate", {})
-        return str(gate_info.get("state", "closed"))
+        return str(self._gate_info.get("state", "closed"))
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        gate_info = (self.coordinator.data or {}).get("gate", {})
+        gate_info = self._gate_info
         return {
+            "gate_id": self.gate_id or "gate_1",
             "is_open": gate_info.get("is_open", False),
             "countdown_seconds": gate_info.get("countdown_seconds", 0),
             "retries_done": gate_info.get("retries_done", 0),
@@ -232,19 +263,40 @@ class GateCountdownSensor(CoordinatorEntity[DomolinkPlanificationCoordinator], S
     """Capteur indiquant le temps restant en secondes avant la fermeture automatique."""
 
     _attr_has_entity_name = True
-    _attr_name = "Portail Décompte Fermeture"
     _attr_icon = "mdi:timer-sand"
     _attr_native_unit_of_measurement = "s"
 
-    def __init__(self, coordinator: DomolinkPlanificationCoordinator, entry: ConfigEntry) -> None:
+    def __init__(
+        self,
+        coordinator: DomolinkPlanificationCoordinator,
+        entry: ConfigEntry,
+        gate_id: str | None = None,
+    ) -> None:
         super().__init__(coordinator)
         self.entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_gate_countdown_sensor"
+        self.gate_id = gate_id
+        if gate_id and gate_id != "gate_1":
+            self._attr_unique_id = f"{entry.entry_id}_{gate_id}_countdown_sensor"
+        else:
+            self._attr_unique_id = f"{entry.entry_id}_gate_countdown_sensor"
+
+    @property
+    def _gate_info(self) -> dict[str, Any]:
+        data = self.coordinator.data or {}
+        if self.gate_id and self.gate_id in data.get("gates", {}):
+            return data["gates"][self.gate_id]
+        return data.get("gate", {})
+
+    @property
+    def name(self) -> str:
+        if self.gate_id and self.gate_id != "gate_1":
+            g_name = self._gate_info.get("name", self.gate_id)
+            return f"{g_name} Décompte Fermeture"
+        return "Portail Décompte Fermeture"
 
     @property
     def native_value(self) -> int:
-        gate_info = (self.coordinator.data or {}).get("gate", {})
-        return int(gate_info.get("countdown_seconds", 0))
+        return int(self._gate_info.get("countdown_seconds", 0))
 
     @property
     def device_info(self) -> dict[str, Any]:

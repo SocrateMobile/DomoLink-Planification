@@ -29,6 +29,7 @@ from .const import (
     RECURRENCE_EVERY,
     RECURRENCE_NEXT,
     REMINDER_CHANNEL_APP,
+    TARGET_TYPE_GATE,
     TARGET_TYPE_LABEL,
     TARGET_TYPE_REMINDER,
     TIME_TYPE_FIXED,
@@ -36,6 +37,12 @@ from .const import (
     TIME_TYPE_SUNSET,
     TIME_TYPE_ZONE_ENTER,
     TIME_TYPE_ZONE_LEAVE,
+    VACATION_MODE_ALWAYS,
+    VACATION_MODE_EXCLUDE,
+    VACATION_MODE_ONLY,
+    WEATHER_COND_ANY,
+    WEATHER_COND_NO_RAIN,
+    WEATHER_COND_SUNNY,
     DEFAULT_GATE_CONFIG,
     GATE_TYPE_SLIDING,
     GATE_TYPE_DOUBLE_SWING,
@@ -73,7 +80,7 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.storage = storage
         self.resolver = TargetResolver(hass)
-        self.automation_engine = AutomationEngine(hass, storage, self.resolver)
+        self.automation_engine = AutomationEngine(hass, storage, self.resolver, coordinator=self)
         self.solar_shading = SolarShadingEvaluator(hass)
 
         self._last_evaluated_minute: str | None = None
@@ -264,9 +271,19 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     # -------------------------------------------------------------------------
     # Évaluation des règles de suivi solaire (Volets)
     # -------------------------------------------------------------------------
+    def clear_solar_override(self, schedule_id: str) -> None:
+        """Efface la dérogation manuelle d'une règle solaire pour reprendre l'automatisme immédiatement."""
+        st = self._solar_shading_states.get(schedule_id)
+        if st:
+            st["manual_override"] = False
+            st["override_until"] = None
+            st["last_commanded_pos"] = None
+            st["should_shade"] = None
+
     async def _evaluate_solar_shading_rules(self, now: datetime) -> None:
         """Parcourt les règles de type suivi solaire et positionne les volets."""
         schedules = self.storage.get_schedules()
+        settings = self.storage.get_settings()
         for sched_id, sched in schedules.items():
             if not sched.get("enabled", True):
                 continue
@@ -274,7 +291,12 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 continue
 
             last_state = self._solar_shading_states.get(sched_id)
-            eval_result = self.solar_shading.evaluate_rule(sched, last_state)
+            eval_result = self.solar_shading.evaluate_rule(
+                sched,
+                last_action_state=last_state,
+                settings=settings,
+                now=now,
+            )
             self._solar_shading_states[sched_id] = eval_result
 
             # Si une action est requise (changement de position nécessaire)
@@ -284,12 +306,24 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 reason = eval_result.get("reason", "")
 
                 if cover_id and target_pos is not None:
-                    _LOGGER.info("DomoLink-Planification [Volet Solaire] %s : %s", cover_id, reason)
+                    # Résolution d'étiquette (label:) ou entité directe
+                    if str(cover_id).startswith("label:"):
+                        target_covers = [
+                            eid for eid in self.resolver.resolve_entities(TARGET_TYPE_LABEL, str(cover_id)[6:])
+                            if eid.startswith("cover.")
+                        ]
+                    else:
+                        target_covers = [cover_id]
+
+                    if not target_covers:
+                        continue
+
+                    _LOGGER.info("DomoLink-Planification [Volet Solaire] %s : %s", target_covers, reason)
                     try:
                         await self.hass.services.async_call(
                             "cover",
                             "set_cover_position",
-                            {"entity_id": cover_id, "position": target_pos},
+                            {"entity_id": target_covers, "position": target_pos},
                             blocking=True,
                         )
                         await self.storage.async_add_history({
@@ -300,7 +334,7 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             "details": reason,
                         })
                     except Exception as err:
-                        _LOGGER.error("Erreur commande volet %s : %s", cover_id, err)
+                        _LOGGER.error("Erreur commande volet %s : %s", target_covers, err)
 
     # -------------------------------------------------------------------------
     # Évaluation des règles temporelles (Heure, Solaire, Ponctuel, Intervalle)
@@ -340,16 +374,7 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Déclenchement de l'action
             _LOGGER.info("DomoLink-Planification [%s] Déclenchement de l'action...", sched.get("name"))
-            action_data = dict(sched.get("action_data", {}))
-            if sched.get("target_type") == TARGET_TYPE_REMINDER:
-                action_data["reminder_message"] = sched.get("reminder_message") or sched.get("target_value")
-                action_data["channel"] = sched.get("reminder_channel") or REMINDER_CHANNEL_APP
-
-            success = await self.resolver.execute_action(
-                target_type=sched.get("target_type"),
-                target_value=sched.get("target_value"),
-                action_data=action_data,
-            )
+            success = await self._execute_schedule_action(sched)
 
             # Enregistrer dans l'historique
             await self.storage.async_add_history({
@@ -469,16 +494,7 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # 5. Déclenchement de l'action !
             _LOGGER.info("DomoLink-Planification [Zone %s] Déclenchement pour %s (%s -> %s)", sched.get("name"), person_id, old_st, new_st)
-            action_data = dict(sched.get("action_data", {}))
-            if sched.get("target_type") == TARGET_TYPE_REMINDER:
-                action_data["reminder_message"] = sched.get("reminder_message") or sched.get("target_value")
-                action_data["channel"] = sched.get("reminder_channel") or REMINDER_CHANNEL_APP
-
-            success = await self.resolver.execute_action(
-                target_type=sched.get("target_type"),
-                target_value=sched.get("target_value"),
-                action_data=action_data,
-            )
+            success = await self._execute_schedule_action(sched)
 
             # 6. Historique
             event_name = "Arrivée" if time_type == TIME_TYPE_ZONE_ENTER else "Sortie"
@@ -580,6 +596,33 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if alarm_mode == "armed" and is_disarmed:
                     return False, f"Alarme désarmée ({alarm_entity}={a_state.state}) ➔ action annulée"
 
+        # 4. Mode Vacances / Simulation de présence
+        sched_vac = sched.get("vacation_mode", VACATION_MODE_ALWAYS)
+        is_vacation = bool(self.storage.get_settings().get("vacation_mode", False))
+        if sched_vac == VACATION_MODE_ONLY and not is_vacation:
+            return False, "Exécuté uniquement lorsque le Mode Vacances est actif"
+        if sched_vac == VACATION_MODE_EXCLUDE and is_vacation:
+            return False, "Suspendu pendant le Mode Vacances"
+
+        # 5. Condition Météo (ex: Pas de pluie pour arrosage / extérieur)
+        w_cond = sched.get("weather_condition", WEATHER_COND_ANY)
+        if w_cond and w_cond != WEATHER_COND_ANY:
+            w_entity = sched.get("weather_entity") or self.storage.get_settings().get("solar_weather_entity")
+            if not w_entity or not str(w_entity).startswith("weather."):
+                for st_obj in self.hass.states.async_all("weather"):
+                    w_entity = st_obj.entity_id
+                    break
+            if w_entity:
+                w_state = self.hass.states.get(w_entity)
+                if w_state and w_state.state not in ("unknown", "unavailable"):
+                    st_val = str(w_state.state).lower()
+                    rain_states = {"rainy", "pouring", "lightning-rainy", "hail", "snowy", "snowy-rainy"}
+                    sunny_states = {"sunny", "clear-night", "partlycloudy"}
+                    if w_cond == WEATHER_COND_NO_RAIN and st_val in rain_states:
+                        return False, f"Météo pluvieuse/intempéries ({st_val}) ➔ action annulée"
+                    if w_cond == WEATHER_COND_SUNNY and st_val not in sunny_states:
+                        return False, f"Météo non ensoleillée ({st_val}) ➔ action annulée"
+
         return True, "Conditions validées"
 
     # -------------------------------------------------------------------------
@@ -627,8 +670,44 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return results
 
     # -------------------------------------------------------------------------
-    # Déclenchement manuel immédiat (Test)
+    # Exécution d'action de planification & Déclenchement manuel immédiat
     # -------------------------------------------------------------------------
+    async def _execute_schedule_action(self, sched: dict[str, Any]) -> bool:
+        """Exécute la cible d'une planification (incluant le contrôle natif d'accès DomoLink)."""
+        target_type = sched.get("target_type")
+        target_value = sched.get("target_value")
+        action_data = dict(sched.get("action_data", {}))
+
+        if target_type == TARGET_TYPE_GATE:
+            gate_id = target_value or action_data.get("gate_id") or "gate_1"
+            operation = action_data.get("gate_operation") or action_data.get("service") or "toggle"
+            if operation in ("toggle", "trigger"):
+                return await self.async_gate_trigger_action(mode="toggle", gate_id=gate_id)
+            elif operation in ("open", "open_now"):
+                return await self.async_gate_trigger_action(mode="open", gate_id=gate_id)
+            elif operation in ("close", "close_now"):
+                return await self.async_gate_trigger_action(mode="close", gate_id=gate_id)
+            elif operation == "pedestrian":
+                return await self.async_gate_trigger_action(mode="pedestrian", gate_id=gate_id)
+            elif operation == "hold_open":
+                dur = int(action_data.get("duration_minutes") or 60)
+                await self.async_gate_set_hold_open(True, duration_minutes=dur, gate_id=gate_id)
+                return True
+            elif operation == "cancel_hold_open":
+                await self.async_gate_set_hold_open(False, gate_id=gate_id)
+                return True
+            return await self.async_gate_trigger_action(mode="toggle", gate_id=gate_id)
+
+        if target_type == TARGET_TYPE_REMINDER:
+            action_data["reminder_message"] = sched.get("reminder_message") or target_value
+            action_data["channel"] = sched.get("reminder_channel") or REMINDER_CHANNEL_APP
+
+        return await self.resolver.execute_action(
+            target_type=target_type,
+            target_value=target_value,
+            action_data=action_data,
+        )
+
     async def async_trigger_now(self, schedule_id: str) -> bool:
         """Déclenche manuellement et immédiatement une planification."""
         sched = self.storage.get_schedule(schedule_id)
@@ -636,11 +715,7 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return False
 
         _LOGGER.info("DomoLink-Planification: Déclenchement manuel forcé de '%s'", sched.get("name", schedule_id))
-        success = await self.resolver.execute_action(
-            target_type=sched.get("target_type"),
-            target_value=sched.get("target_value"),
-            action_data=sched.get("action_data", {}),
-        )
+        success = await self._execute_schedule_action(sched)
 
         now = dt_util.now()
         await self.storage.async_add_history({
@@ -648,7 +723,7 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "schedule_id": schedule_id,
             "name": sched.get("name", schedule_id),
             "status": "MANUAL_TRIGGER" if success else "FAILED",
-            "details": f"Déclenchement manuel via bouton / service",
+            "details": "Déclenchement manuel via bouton / service",
         })
         return success
 
@@ -846,6 +921,52 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             st_mem["state"] = "opening"
             st_mem["last_action"] = "Ouverture en cours..."
             st_mem["last_action_time"] = now.isoformat()
+
+            # Vérification Alerte Ouverture Nocturne / Intrusion
+            current_time_str = now.strftime("%H:%M")
+            day_start = cfg.get("day_start", "07:00")
+            night_start = cfg.get("night_start", "22:00")
+            if day_start <= night_start:
+                is_day = day_start <= current_time_str < night_start
+            else:
+                is_day = current_time_str >= day_start or current_time_str < night_start
+
+            if not is_day and cfg.get("night_intrusion_alert", False):
+                alert_msg = f"🚨 [ALERTE NUIT] {gate_name} vient de s'ouvrir en plage nocturne ({current_time_str}) !"
+                _LOGGER.warning("DomoLink-Accès: %s", alert_msg)
+                await self._async_send_gate_notification(alert_msg, gate_id=gate_id)
+                try:
+                    await self.hass.services.async_call(
+                        "persistent_notification",
+                        "create",
+                        {
+                            "title": f"🚨 Alerte Ouverture Nocturne : {gate_name}",
+                            "message": alert_msg,
+                            "notification_id": f"domolink_night_alert_{gate_id}",
+                        },
+                        blocking=False,
+                    )
+                except Exception:
+                    pass
+
+                light_ent = cfg.get("night_intrusion_light_entity")
+                if light_ent:
+                    try:
+                        for target_light in self._resolve_switch_entities(light_ent):
+                            dom = target_light.split(".")[0]
+                            await self.hass.services.async_call(
+                                dom, "turn_on", {"entity_id": target_light}, blocking=False
+                            )
+                    except Exception as err:
+                        _LOGGER.error("DomoLink-Accès: Erreur allumage éclairage nocturne %s: %s", light_ent, err)
+
+                await self.storage.async_add_gate_history({
+                    "timestamp": now.isoformat(),
+                    "gate_id": gate_id,
+                    "event": "ALERTE_NUIT",
+                    "status": "INTRUSION_ALERT",
+                    "details": alert_msg,
+                })
 
             # Tâche asynchrone pour marquer la fin de la manœuvre d'ouverture
             async def _async_complete_opening_maneuver():
@@ -1082,47 +1203,141 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         pedestrian_switch_entity = cfg.get("pedestrian_switch_entity")
         pulse_duration = float(cfg.get("pulse_duration", 1.0))
 
-        # Commande dédiée à l'accès piéton / portillon
+        # Commande dédiée à l'accès piéton / livreur (avec switch dédié OU cycle partiel sur switch principal)
         if mode == "pedestrian":
-            if not pedestrian_switch_entity:
-                _LOGGER.warning("DomoLink-Accès [%s]: Aucun switch configuré pour l'accès piéton", gate_name)
-                return False
-            try:
-                targets = self._resolve_switch_entities(pedestrian_switch_entity)
-                for ent in targets:
-                    domain = ent.split(".")[0]
-                    await self.hass.services.async_call(domain, "turn_on", {"entity_id": ent}, blocking=True)
-                if pulse_duration > 0:
-                    await asyncio.sleep(pulse_duration)
+            ped_close_min = float(cfg.get("pedestrian_close_minutes", 2))
+            if pedestrian_switch_entity:
+                try:
+                    targets = self._resolve_switch_entities(pedestrian_switch_entity)
                     for ent in targets:
                         domain = ent.split(".")[0]
-                        st = self.hass.states.get(ent)
-                        if st and st.state == "on":
-                            await self.hass.services.async_call(domain, "turn_off", {"entity_id": ent}, blocking=True)
+                        await self.hass.services.async_call(domain, "turn_on", {"entity_id": ent}, blocking=True)
+                    if pulse_duration > 0:
+                        await asyncio.sleep(pulse_duration)
+                        for ent in targets:
+                            domain = ent.split(".")[0]
+                            st = self.hass.states.get(ent)
+                            if st and st.state == "on":
+                                await self.hass.services.async_call(domain, "turn_off", {"entity_id": ent}, blocking=True)
 
-                now = dt_util.now()
-                st_mem["state"] = "opening"
-                st_mem["movement_start"] = now.isoformat()
-                st_mem["last_action"] = "Ouverture piéton en cours..."
-                st_mem["last_action_time"] = now.isoformat()
-                self.data["gate"] = self.get_gate_status()
-                self.data["gates"] = self.get_all_gates_status()
-                self.async_set_updated_data(self.data)
-                await self.storage.async_add_gate_history({
-                    "timestamp": now.isoformat(),
-                    "gate_id": gate_id,
-                    "event": "OUVERTURE_PIETON",
-                    "status": "PEDESTRIAN",
-                    "details": f"[{gate_name}] Commande d'accès piéton déclenchée",
-                })
-                return True
-            except Exception as err:
-                _LOGGER.error("DomoLink-Accès [%s]: Erreur commande accès piéton: %s", gate_name, err)
+                    now = dt_util.now()
+                    st_mem["state"] = "opening"
+                    st_mem["movement_start"] = now.isoformat()
+                    st_mem["last_action"] = "Ouverture piéton en cours..."
+                    st_mem["last_action_time"] = now.isoformat()
+                    if ped_close_min > 0 and cfg.get("enabled", True):
+                        st_mem["target_close_time"] = (now + timedelta(minutes=ped_close_min)).isoformat()
+                    self.data["gate"] = self.get_gate_status()
+                    self.data["gates"] = self.get_all_gates_status()
+                    self.async_set_updated_data(self.data)
+                    await self.storage.async_add_gate_history({
+                        "timestamp": now.isoformat(),
+                        "gate_id": gate_id,
+                        "event": "OUVERTURE_PIETON",
+                        "status": "PEDESTRIAN",
+                        "details": f"[{gate_name}] Commande d'accès piéton dédiée déclenchée",
+                    })
+                    return True
+                except Exception as err:
+                    _LOGGER.error("DomoLink-Accès [%s]: Erreur commande accès piéton: %s", gate_name, err)
+                    return False
+            elif switch_entity and switch_type in (GATE_SWITCH_TYPE_PULSE, GATE_SWITCH_TYPE_COVER):
+                # Cycle intelligent d'ouverture partielle (Impulsion Ouverture -> Attente X sec -> Impulsion Stop)
+                ped_open_sec = max(2.0, float(cfg.get("pedestrian_open_seconds", 5)))
+                try:
+                    targets = self._resolve_switch_entities(switch_entity)
+                    if switch_type == GATE_SWITCH_TYPE_COVER:
+                        for ent in targets:
+                            await self.hass.services.async_call("cover", "open_cover", {"entity_id": ent}, blocking=True)
+                    else:
+                        for ent in targets:
+                            domain = ent.split(".")[0]
+                            await self.hass.services.async_call(domain, "turn_on", {"entity_id": ent}, blocking=True)
+                        if pulse_duration > 0:
+                            await asyncio.sleep(pulse_duration)
+                            for ent in targets:
+                                domain = ent.split(".")[0]
+                                st = self.hass.states.get(ent)
+                                if st and st.state == "on":
+                                    await self.hass.services.async_call(domain, "turn_off", {"entity_id": ent}, blocking=True)
+
+                    now = dt_util.now()
+                    st_mem["state"] = "opening"
+                    st_mem["movement_start"] = now.isoformat()
+                    st_mem["last_action"] = f"Ouverture Piéton/Livreur ({int(ped_open_sec)}s)..."
+                    st_mem["last_action_time"] = now.isoformat()
+                    self.data["gate"] = self.get_gate_status()
+                    self.data["gates"] = self.get_all_gates_status()
+                    self.async_set_updated_data(self.data)
+
+                    async def _async_stop_pedestrian_opening():
+                        await asyncio.sleep(ped_open_sec)
+                        # Envoyer la seconde impulsion pour stopper l'ouverture à mi-course
+                        if switch_type == GATE_SWITCH_TYPE_COVER:
+                            for ent in targets:
+                                await self.hass.services.async_call("cover", "stop_cover", {"entity_id": ent}, blocking=True)
+                        else:
+                            for ent in targets:
+                                domain = ent.split(".")[0]
+                                await self.hass.services.async_call(domain, "turn_on", {"entity_id": ent}, blocking=True)
+                            if pulse_duration > 0:
+                                await asyncio.sleep(pulse_duration)
+                                for ent in targets:
+                                    domain = ent.split(".")[0]
+                                    st = self.hass.states.get(ent)
+                                    if st and st.state == "on":
+                                        await self.hass.services.async_call(domain, "turn_off", {"entity_id": ent}, blocking=True)
+                        now_stop = dt_util.now()
+                        st_mem["state"] = "open"
+                        st_mem["movement_start"] = None
+                        if ped_close_min > 0:
+                            st_mem["target_close_time"] = (now_stop + timedelta(minutes=ped_close_min)).isoformat()
+                            st_mem["last_action"] = f"Ouvert en mode Piéton (fermeture dans {int(ped_close_min)} min)"
+                        else:
+                            st_mem["last_action"] = "Ouvert partiellement (Mode Piéton)"
+                        st_mem["last_action_time"] = now_stop.isoformat()
+                        self.data["gate"] = self.get_gate_status()
+                        self.data["gates"] = self.get_all_gates_status()
+                        self.async_set_updated_data(self.data)
+
+                    if gate_id in self._gate_opening_tasks and not self._gate_opening_tasks[gate_id].done():
+                        self._gate_opening_tasks[gate_id].cancel()
+                    self._gate_opening_tasks[gate_id] = self.hass.async_create_task(_async_stop_pedestrian_opening())
+
+                    await self.storage.async_add_gate_history({
+                        "timestamp": now.isoformat(),
+                        "gate_id": gate_id,
+                        "event": "OUVERTURE_PIETON",
+                        "status": "PEDESTRIAN",
+                        "details": f"[{gate_name}] Ouverture partielle Piéton/Livreur ({int(ped_open_sec)}s, refermeture dans {int(ped_close_min)} min)",
+                    })
+                    return True
+                except Exception as err:
+                    _LOGGER.error("DomoLink-Accès [%s]: Erreur cycle ouverture partielle piéton: %s", gate_name, err)
+                    return False
+            else:
+                _LOGGER.warning("DomoLink-Accès [%s]: Aucun switch configuré pour l'accès piéton", gate_name)
                 return False
 
         if not switch_entity:
             _LOGGER.warning("DomoLink-Accès [%s]: Aucun switch configuré pour commander l'accès", gate_name)
             return False
+
+        # Protection directionnelle intelligente sur contact sec impulsionnel :
+        # Ne pas envoyer d'impulsion d'ouverture si déjà ouvert, ni de fermeture si déjà fermé
+        current_st = st_mem.get("state", "closed")
+        if switch_type == GATE_SWITCH_TYPE_PULSE:
+            if mode == "open" and current_st in ("open", "opening", "hold_open"):
+                _LOGGER.info("DomoLink-Accès [%s]: Déjà ouvert (%s), impulsion d'ouverture ignorée", gate_name, current_st)
+                return True
+            if mode == "close" and current_st == "closed":
+                sensor_id = cfg.get("sensor_entity")
+                is_phys_open = False
+                if sensor_id:
+                    _, is_phys_open = self._get_gate_sensor_resolved_state(sensor_id, cfg)
+                if not is_phys_open:
+                    _LOGGER.info("DomoLink-Accès [%s]: Déjà fermé, impulsion de fermeture ignorée", gate_name)
+                    return True
 
         try:
             if switch_type == GATE_SWITCH_TYPE_PULSE:
