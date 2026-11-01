@@ -207,6 +207,7 @@ class DomolinkPlanificationApiView(HomeAssistantView):
                 "next_runs": self.coordinator.data.get("next_runs", {}),
                 "solar_states": self.coordinator.data.get("solar_states", {}),
                 "gate": self.coordinator.get_gate_status(),
+                "gates": self.coordinator.get_all_gates_status(),
                 "gate_history": self.coordinator.storage.get_gate_history(),
                 "automations": self.coordinator.storage.get_automations(),
                 "automation_traces": self.coordinator.storage.get_automation_traces(),
@@ -216,10 +217,11 @@ class DomolinkPlanificationApiView(HomeAssistantView):
         if action == "sniffer_status":
             return self.json(self.coordinator.automation_engine.get_sniffed_event())
 
-
         if action == "gate_data":
+            gate_id = request.query.get("id") or request.query.get("gate_id")
             return self.json({
-                "gate": self.coordinator.get_gate_status(),
+                "gate": self.coordinator.get_gate_status(gate_id),
+                "gates": self.coordinator.get_all_gates_status(),
                 "gate_history": self.coordinator.storage.get_gate_history(),
             })
 
@@ -263,33 +265,56 @@ class DomolinkPlanificationApiView(HomeAssistantView):
             return self.json({"status": "ok"})
 
         if action == "save_gate_config":
-            await self.coordinator.storage.async_update_gate_config(body)
-            self.coordinator._init_gate_state_from_sensor()
+            gate_id = body.get("id") or body.get("gate_id") or "gate_1"
+            await self.coordinator.storage.async_save_gate(gate_id, body)
+            self.coordinator._init_gate_state_from_sensor(gate_id)
             self.coordinator.async_set_updated_data(await self.coordinator._async_update_data())
-            return self.json({"status": "ok", "gate": self.coordinator.get_gate_status()})
+            return self.json({
+                "status": "ok",
+                "id": gate_id,
+                "gate": self.coordinator.get_gate_status(gate_id),
+                "gates": self.coordinator.get_all_gates_status(),
+            })
+
+        if action == "delete_gate":
+            gate_id = body.get("id") or body.get("gate_id")
+            if gate_id:
+                success = await self.coordinator.storage.async_delete_gate(gate_id)
+                self.coordinator.async_set_updated_data(await self.coordinator._async_update_data())
+                return self.json({
+                    "status": "ok" if success else "not_found",
+                    "gates": self.coordinator.get_all_gates_status(),
+                })
+            return self.json({"error": "ID manquant"}, status=400)
 
         if action == "gate_action":
+            gate_id = body.get("gate_id") or body.get("id")
             act = body.get("action")
             if act == "trigger":
-                await self.coordinator.async_gate_trigger_action(mode="toggle")
+                await self.coordinator.async_gate_trigger_action(mode="toggle", gate_id=gate_id)
             elif act == "pedestrian":
-                await self.coordinator.async_gate_trigger_action(mode="pedestrian")
+                await self.coordinator.async_gate_trigger_action(mode="pedestrian", gate_id=gate_id)
             elif act == "close_now":
-                await self.coordinator.async_gate_trigger_action(mode="close")
+                await self.coordinator.async_gate_trigger_action(mode="close", gate_id=gate_id)
             elif act == "open_now":
-                await self.coordinator.async_gate_trigger_action(mode="open")
+                await self.coordinator.async_gate_trigger_action(mode="open", gate_id=gate_id)
             elif act == "hold_open":
                 duration = body.get("duration_minutes")
-                await self.coordinator.async_gate_set_hold_open(True, duration_minutes=duration)
+                await self.coordinator.async_gate_set_hold_open(True, duration_minutes=duration, gate_id=gate_id)
             elif act == "cancel_hold_open":
-                await self.coordinator.async_gate_set_hold_open(False)
+                await self.coordinator.async_gate_set_hold_open(False, gate_id=gate_id)
             elif act == "toggle_enabled":
-                cfg = self.coordinator.storage.get_gate_config()
+                cfg = self.coordinator.storage.get_gate_config(gate_id)
                 cfg["enabled"] = not cfg.get("enabled", True)
-                await self.coordinator.storage.async_update_gate_config(cfg)
+                gid = cfg.get("id") or gate_id or "gate_1"
+                await self.coordinator.storage.async_save_gate(gid, cfg)
 
             self.coordinator.async_set_updated_data(await self.coordinator._async_update_data())
-            return self.json({"status": "ok", "gate": self.coordinator.get_gate_status()})
+            return self.json({
+                "status": "ok",
+                "gate": self.coordinator.get_gate_status(gate_id),
+                "gates": self.coordinator.get_all_gates_status(),
+            })
 
         # --- ACTIONS BRIQUE AUTOMATISATIONS ---
         if action == "save_automation":

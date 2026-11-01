@@ -35,6 +35,7 @@ class PlanificationStorage:
                 "alarm_entity": None,
             },
             "gate": dict(DEFAULT_GATE_CONFIG),
+            "gates": {},
             "gate_history": [],
             "automations": {},
             "automation_traces": [],
@@ -57,14 +58,25 @@ class PlanificationStorage:
             gate_data = self.data.setdefault("gate", {})
             for k, v in DEFAULT_GATE_CONFIG.items():
                 gate_data.setdefault(k, v)
+            
+            # Migration & support multi-accès (portails, portes, garages)
+            gates_data = self.data.setdefault("gates", {})
+            if not gates_data and gate_data:
+                primary_id = gate_data.get("id", "gate_1")
+                gate_data["id"] = primary_id
+                gate_data.setdefault("name", "Portail Principal")
+                gates_data[primary_id] = gate_data
+
             self.data.setdefault("gate_history", [])
             self.data.setdefault("automations", {})
             self.data.setdefault("automation_traces", [])
             _LOGGER.info(
-                "DomoLink-Planification: %d règle(s), %d automatisation(s) chargée(s)",
+                "DomoLink-Planification: %d règle(s), %d accès, %d automatisation(s) chargée(s)",
                 len(self.data["schedules"]),
+                len(self.data["gates"]),
                 len(self.data["automations"]),
             )
+
         else:
             _LOGGER.info("DomoLink-Planification: Nouveau stockage initialisé")
         return self.data
@@ -126,19 +138,61 @@ class PlanificationStorage:
         await self.async_save()
 
     # -------------------------------------------------------------------------
-    # Gestion du Portail & Accès
+    # Gestion Multi-Accès : Portails, Portes & Garages
     # -------------------------------------------------------------------------
-    def get_gate_config(self) -> dict[str, Any]:
-        """Retourne la configuration du portail."""
+    def get_gates(self) -> dict[str, dict[str, Any]]:
+        """Retourne tous les accès configurés (portails, portes, garages)."""
+        gates = self.data.get("gates", {})
+        if not gates and "gate" in self.data:
+            g = self.data["gate"]
+            gid = g.get("id", "gate_1")
+            return {gid: g}
+        return gates
+
+    def get_gate_config(self, gate_id: str | None = None) -> dict[str, Any]:
+        """Retourne la configuration d'un accès spécifique ou du premier par défaut."""
+        gates = self.get_gates()
+        if gate_id and gate_id in gates:
+            cfg = dict(DEFAULT_GATE_CONFIG)
+            cfg.update(gates[gate_id])
+            return cfg
+        if gates:
+            first_key = next(iter(gates))
+            cfg = dict(DEFAULT_GATE_CONFIG)
+            cfg.update(gates[first_key])
+            return cfg
         cfg = dict(DEFAULT_GATE_CONFIG)
         cfg.update(self.data.get("gate", {}))
         return cfg
 
-    async def async_update_gate_config(self, new_config: dict[str, Any]) -> None:
-        """Met à jour la configuration du portail."""
-        gate_data = self.data.setdefault("gate", dict(DEFAULT_GATE_CONFIG))
-        gate_data.update(new_config)
+    async def async_save_gate(self, gate_id: str, new_config: dict[str, Any]) -> None:
+        """Enregistre ou met à jour un portail / porte / accès."""
+        new_config["id"] = gate_id
+        gates = self.data.setdefault("gates", {})
+        gates[gate_id] = new_config
+        if gate_id == "gate_1" or len(gates) == 1:
+            self.data["gate"] = new_config
         await self.async_save()
+
+    async def async_update_gate_config(self, new_config: dict[str, Any]) -> None:
+        """Met à jour la configuration du portail principal (rétrocompatibilité)."""
+        gid = new_config.get("id") or "gate_1"
+        await self.async_save_gate(gid, new_config)
+
+    async def async_delete_gate(self, gate_id: str) -> bool:
+        """Supprime un accès par son ID."""
+        gates = self.data.setdefault("gates", {})
+        if gate_id in gates:
+            del gates[gate_id]
+            if self.data.get("gate", {}).get("id") == gate_id:
+                if gates:
+                    self.data["gate"] = next(iter(gates.values()))
+                else:
+                    self.data["gate"] = dict(DEFAULT_GATE_CONFIG)
+            await self.async_save()
+            return True
+        return False
+
 
     def get_gate_history(self, limit: int = 50) -> list[dict[str, Any]]:
         """Retourne l'historique récent du portail."""

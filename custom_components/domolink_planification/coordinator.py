@@ -81,18 +81,34 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._remove_timer: Any = None
         self._remove_state_listener: Any = None
         self._remove_gate_timer: Any = None
-        self._gate_task: asyncio.Task | None = None
-        self._gate_state: dict[str, Any] = {
-            "state": "closed",
-            "open_since": None,
-            "target_close_time": None,
-            "retries_done": 0,
-            "last_action": "Initialisation",
-            "last_action_time": None,
-            "check_in_progress": False,
-            "hold_open": False,
-            "hold_open_until": None,
-        }
+        self._gate_tasks: dict[str, asyncio.Task] = {}
+        self._gate_opening_tasks: dict[str, asyncio.Task] = {}
+        self._gate_states: dict[str, dict[str, Any]] = {}
+
+    @property
+    def _gate_state(self) -> dict[str, Any]:
+        """Accès rétrocompatible à l'état du portail principal."""
+        gates = self.storage.get_gates()
+        first_id = next(iter(gates)) if gates else "gate_1"
+        return self._get_gate_internal_state(first_id)
+
+    def _get_gate_internal_state(self, gate_id: str = "gate_1") -> dict[str, Any]:
+        """Retourne ou initialise l'état mémoire d'un portail/accès."""
+        if gate_id not in self._gate_states:
+            self._gate_states[gate_id] = {
+                "state": "closed",
+                "open_since": None,
+                "target_close_time": None,
+                "retries_done": 0,
+                "last_action": "Initialisation",
+                "last_action_time": None,
+                "check_in_progress": False,
+                "hold_open": False,
+                "hold_open_until": None,
+                "movement_start": None,
+            }
+        return self._gate_states[gate_id]
+
 
     async def async_init(self) -> None:
         """Initialise le stockage et lance la boucle de synchronisation temporelle."""
@@ -111,9 +127,11 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "next_runs": self.compute_all_next_runs(),
             "solar_states": self._solar_shading_states,
             "gate": self.get_gate_status(),
+            "gates": self.get_all_gates_status(),
             "automations": self.storage.get_automations(),
             "automation_traces": self.storage.get_automation_traces(),
         }
+
 
         # Démarrer la boucle périodique de vérification des plannings (chaque 30s)
         self._remove_timer = async_track_time_interval(
@@ -136,10 +154,12 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not entity_id:
                 return
 
-            # Surveillance du capteur du portail (entité directe ou étiquette/tag)
-            gate_cfg = self.storage.get_gate_config()
-            sensor_id = gate_cfg.get("sensor_entity")
-            if sensor_id:
+            # Surveillance des capteurs de tous les accès (portails, portes, garages)
+            gates = self.storage.get_gates()
+            for gid, gcfg in gates.items():
+                sensor_id = gcfg.get("sensor_entity")
+                if not sensor_id:
+                    continue
                 is_target_sensor = False
                 if entity_id == sensor_id:
                     is_target_sensor = True
@@ -153,9 +173,10 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     new_state = event.data.get("new_state")
                     if old_state and new_state and old_state.state != new_state.state:
                         self.hass.async_create_task(
-                            self._async_handle_gate_sensor_change(old_state.state, new_state.state)
+                            self._async_handle_gate_sensor_change(old_state.state, new_state.state, gate_id=gid)
                         )
                     return
+
 
             # Surveillance des personnes et trackers
             if entity_id.startswith("person.") or entity_id.startswith("device_tracker."):
@@ -186,8 +207,12 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._remove_state_listener:
             self._remove_state_listener()
             self._remove_state_listener = None
-        if self._gate_task and not self._gate_task.done():
-            self._gate_task.cancel()
+        for task in self._gate_tasks.values():
+            if task and not task.done():
+                task.cancel()
+        for task in self._gate_opening_tasks.values():
+            if task and not task.done():
+                task.cancel()
 
     async def _async_tick(self, now: datetime) -> None:
         """Vérification périodique des déclencheurs et du suivi solaire."""
@@ -229,7 +254,9 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "next_runs": self.compute_all_next_runs(),
             "solar_states": self._solar_shading_states,
             "gate": self.get_gate_status(),
+            "gates": self.get_all_gates_status(),
             "labels": labels_list,
+
             "automations": self.storage.get_automations(),
             "automation_traces": self.storage.get_automation_traces(),
         }
@@ -659,20 +686,24 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return self.resolver.resolve_entities(TARGET_TYPE_LABEL, target[6:])
         return [target]
 
-    def _init_gate_state_from_sensor(self) -> None:
-        """Détecte l'état initial du portail depuis Home Assistant."""
-        cfg = self.storage.get_gate_config()
-        sensor_id = cfg.get("sensor_entity")
-        if sensor_id:
-            raw_state, is_open = self._get_gate_sensor_resolved_state(sensor_id, cfg)
-            if raw_state is not None:
-                self._gate_state["state"] = "open" if is_open else "closed"
-                if is_open:
-                    now = dt_util.now()
-                    self._gate_state["open_since"] = now.isoformat()
-                    timer_min = self._get_current_timer_minutes(cfg, now)
-                    if cfg.get("enabled", True) and not cfg.get("hold_open", False):
-                        self._gate_state["target_close_time"] = (now + timedelta(minutes=timer_min)).isoformat()
+    def _init_gate_state_from_sensor(self, gate_id: str | None = None) -> None:
+        """Détecte l'état initial d'un ou tous les portails/accès depuis Home Assistant."""
+        gates = self.storage.get_gates()
+        target_ids = [gate_id] if gate_id and gate_id in gates else list(gates.keys())
+        for gid in target_ids:
+            cfg = self.storage.get_gate_config(gid)
+            st_mem = self._get_gate_internal_state(gid)
+            sensor_id = cfg.get("sensor_entity")
+            if sensor_id:
+                raw_state, is_open = self._get_gate_sensor_resolved_state(sensor_id, cfg)
+                if raw_state is not None:
+                    st_mem["state"] = "open" if is_open else "closed"
+                    if is_open:
+                        now = dt_util.now()
+                        st_mem["open_since"] = now.isoformat()
+                        timer_min = self._get_current_timer_minutes(cfg, now)
+                        if cfg.get("enabled", True) and not cfg.get("hold_open", False):
+                            st_mem["target_close_time"] = (now + timedelta(minutes=timer_min)).isoformat()
 
     def _is_gate_open_value(self, state_val: str | None, cfg: dict[str, Any]) -> bool:
         """Détermine si la valeur d'état correspond à un portail ouvert."""
@@ -697,18 +728,23 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return int(cfg.get("timer_day_minutes", 10))
         return int(cfg.get("timer_night_minutes", 3))
 
-    def get_gate_status(self) -> dict[str, Any]:
-        """Retourne l'état complet et temps réel du portail pour le frontend."""
-        cfg = self.storage.get_gate_config()
+    def get_gate_status(self, gate_id: str | None = None) -> dict[str, Any]:
+        """Retourne l'état complet et temps réel d'un portail/accès pour le frontend."""
+        gates = self.storage.get_gates()
+        if not gate_id:
+            gate_id = next(iter(gates)) if gates else "gate_1"
+        cfg = self.storage.get_gate_config(gate_id)
+        st_mem = self._get_gate_internal_state(gate_id)
+
         now = dt_util.now()
         travel_time = float(cfg.get("travel_time", 15))
         gate_type = cfg.get("gate_type", GATE_TYPE_SLIDING)
 
         # Calcul dynamique du mouvement progressif
-        movement_start_iso = self._gate_state.get("movement_start")
+        movement_start_iso = st_mem.get("movement_start")
         movement_elapsed = 0.0
         movement_progress = 0.0
-        current_state = self._gate_state.get("state", "closed")
+        current_state = st_mem.get("state", "closed")
 
         if movement_start_iso and current_state in ("opening", "closing"):
             try:
@@ -719,24 +755,24 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 movement_progress = min(100.0, (movement_elapsed / max(1.0, travel_time)) * 100.0)
                 if movement_elapsed >= travel_time:
                     if current_state == "opening":
-                        self._gate_state["state"] = "open"
+                        st_mem["state"] = "open"
                         current_state = "open"
-                        self._gate_state["movement_start"] = None
+                        st_mem["movement_start"] = None
                     elif current_state == "closing":
                         sensor_id = cfg.get("sensor_entity")
                         is_open = False
                         if sensor_id:
                             _, is_open = self._get_gate_sensor_resolved_state(sensor_id, cfg)
                         if not is_open:
-                            self._gate_state["state"] = "closed"
+                            st_mem["state"] = "closed"
                             current_state = "closed"
-                            self._gate_state["movement_start"] = None
+                            st_mem["movement_start"] = None
             except Exception as err:
-                _LOGGER.debug("Erreur calcul progression mouvement portail: %s", err)
+                _LOGGER.debug("Erreur calcul progression mouvement portail [%s]: %s", gate_id, err)
 
         # Calcul dynamique du compte à rebours en secondes
         countdown = 0
-        target_iso = self._gate_state.get("target_close_time")
+        target_iso = st_mem.get("target_close_time")
         if target_iso and current_state in ("open", "obstacle"):
             try:
                 target_dt = datetime.fromisoformat(target_iso)
@@ -763,21 +799,23 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             is_day = current_time_str >= day_start or current_time_str < night_start
 
         return {
+            "id": gate_id,
+            "name": cfg.get("name", "Portail Principal"),
             "config": cfg,
             "gate_type": gate_type,
             "travel_time": travel_time,
             "state": current_state,
             "is_open": current_state in ("open", "obstacle", "closing", "hold_open", "opening"),
-            "movement_start": self._gate_state.get("movement_start"),
+            "movement_start": st_mem.get("movement_start"),
             "movement_elapsed": round(movement_elapsed, 1),
             "movement_progress": round(movement_progress, 1),
             "countdown_seconds": countdown,
             "target_close_time": target_iso,
-            "open_since": self._gate_state.get("open_since"),
-            "retries_done": self._gate_state.get("retries_done", 0),
+            "open_since": st_mem.get("open_since"),
+            "retries_done": st_mem.get("retries_done", 0),
             "max_retries": cfg.get("max_retries", 6),
-            "last_action": self._gate_state.get("last_action", "Prêt"),
-            "last_action_time": self._gate_state.get("last_action_time"),
+            "last_action": st_mem.get("last_action", "Prêt"),
+            "last_action_time": st_mem.get("last_action_time"),
             "hold_open": cfg.get("hold_open", False),
             "hold_open_until": cfg.get("hold_open_until"),
             "sensor_raw_state": sensor_state,
@@ -786,152 +824,175 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "history": self.storage.get_gate_history(limit=20),
         }
 
-    async def _async_handle_gate_sensor_change(self, old_val: str, new_val: str) -> None:
-        """Gère un changement d'état du capteur physique de portail."""
-        cfg = self.storage.get_gate_config()
+    def get_all_gates_status(self) -> dict[str, dict[str, Any]]:
+        """Retourne le statut complet de chaque accès configuré."""
+        gates = self.storage.get_gates()
+        return {gid: self.get_gate_status(gid) for gid in gates}
+
+    async def _async_handle_gate_sensor_change(self, old_val: str, new_val: str, gate_id: str = "gate_1") -> None:
+        """Gère un changement d'état du capteur physique pour un accès donné."""
+        cfg = self.storage.get_gate_config(gate_id)
+        st_mem = self._get_gate_internal_state(gate_id)
         is_now_open = self._is_gate_open_value(new_val, cfg)
         now = dt_util.now()
         travel_time = float(cfg.get("travel_time", 15))
+        gate_name = cfg.get("name", gate_id)
 
-        _LOGGER.info("DomoLink-Portail: Changement d'état capteur '%s' -> '%s' (is_open=%s)", old_val, new_val, is_now_open)
+        _LOGGER.info("DomoLink-Accès [%s]: Capteur '%s' -> '%s' (is_open=%s)", gate_name, old_val, new_val, is_now_open)
 
         if is_now_open:
-            self._gate_state["open_since"] = now.isoformat()
-            self._gate_state["movement_start"] = now.isoformat()
-            self._gate_state["state"] = "opening"
-            self._gate_state["last_action"] = "Ouverture en cours..."
-            self._gate_state["last_action_time"] = now.isoformat()
+            st_mem["open_since"] = now.isoformat()
+            st_mem["movement_start"] = now.isoformat()
+            st_mem["state"] = "opening"
+            st_mem["last_action"] = "Ouverture en cours..."
+            st_mem["last_action_time"] = now.isoformat()
 
             # Tâche asynchrone pour marquer la fin de la manœuvre d'ouverture
             async def _async_complete_opening_maneuver():
                 await asyncio.sleep(travel_time)
-                if self._gate_state.get("state") == "opening":
+                if st_mem.get("state") == "opening":
                     now_end = dt_util.now()
-                    self._gate_state["movement_start"] = None
+                    st_mem["movement_start"] = None
                     if cfg.get("hold_open", False):
-                        self._gate_state["state"] = "hold_open"
-                        self._gate_state["target_close_time"] = None
+                        st_mem["state"] = "hold_open"
+                        st_mem["target_close_time"] = None
                     elif cfg.get("enabled", True):
                         timer_min = self._get_current_timer_minutes(cfg, now_end)
                         target = now_end + timedelta(minutes=timer_min)
-                        self._gate_state["state"] = "open"
-                        self._gate_state["target_close_time"] = target.isoformat()
-                        self._gate_state["retries_done"] = 0
+                        st_mem["state"] = "open"
+                        st_mem["target_close_time"] = target.isoformat()
+                        st_mem["retries_done"] = 0
                     else:
-                        self._gate_state["state"] = "open"
-                    self._gate_state["last_action"] = "Ouverture terminée"
-                    self._gate_state["last_action_time"] = now_end.isoformat()
+                        st_mem["state"] = "open"
+                    st_mem["last_action"] = "Ouverture terminée"
+                    st_mem["last_action_time"] = now_end.isoformat()
                     self.data["gate"] = self.get_gate_status()
+                    self.data["gates"] = self.get_all_gates_status()
                     self.async_set_updated_data(self.data)
 
-            if getattr(self, "_gate_opening_task", None) and not self._gate_opening_task.done():
-                self._gate_opening_task.cancel()
-            self._gate_opening_task = self.hass.async_create_task(_async_complete_opening_maneuver())
+            if gate_id in self._gate_opening_tasks and not self._gate_opening_tasks[gate_id].done():
+                self._gate_opening_tasks[gate_id].cancel()
+            self._gate_opening_tasks[gate_id] = self.hass.async_create_task(_async_complete_opening_maneuver())
 
             if cfg.get("hold_open", False):
                 await self.storage.async_add_gate_history({
                     "timestamp": now.isoformat(),
+                    "gate_id": gate_id,
                     "event": "OUVERTURE",
                     "status": "HOLD_OPEN",
-                    "details": "Portail ouvert (mode maintien activé, fermeture auto suspendue)",
+                    "details": f"[{gate_name}] Ouvert (mode maintien activé, fermeture auto suspendue)",
                 })
             elif cfg.get("enabled", True):
                 timer_min = self._get_current_timer_minutes(cfg, now)
                 await self.storage.async_add_gate_history({
                     "timestamp": now.isoformat(),
+                    "gate_id": gate_id,
                     "event": "OUVERTURE",
                     "status": "TIMER_STARTED",
-                    "details": f"Portail en ouverture (fermeture automatique programmée dans {timer_min} min)",
+                    "details": f"[{gate_name}] En ouverture (fermeture automatique programmée dans {timer_min} min)",
                 })
         else:
-            # Le portail est fermé
-            self._gate_state["state"] = "closed"
-            self._gate_state["movement_start"] = None
-            self._gate_state["target_close_time"] = None
-            self._gate_state["retries_done"] = 0
-            self._gate_state["open_since"] = None
-            self._gate_state["last_action"] = "Fermeture confirmée"
-            self._gate_state["last_action_time"] = now.isoformat()
+            # L'accès est fermé
+            st_mem["state"] = "closed"
+            st_mem["movement_start"] = None
+            st_mem["target_close_time"] = None
+            st_mem["retries_done"] = 0
+            st_mem["open_since"] = None
+            st_mem["last_action"] = "Fermeture confirmée"
+            st_mem["last_action_time"] = now.isoformat()
             await self.storage.async_add_gate_history({
                 "timestamp": now.isoformat(),
+                "gate_id": gate_id,
                 "event": "FERMETURE",
                 "status": "CLOSED",
-                "details": "Portail fermé et sécurisé",
+                "details": f"[{gate_name}] Fermé et sécurisé",
             })
 
         self.data["gate"] = self.get_gate_status()
+        self.data["gates"] = self.get_all_gates_status()
         self.async_set_updated_data(self.data)
 
     async def _async_gate_tick(self, now: datetime) -> None:
-        """Vérification rapide (toutes les 5s) pour le décompte et l'auto-fermeture."""
-        cfg = self.storage.get_gate_config()
+        """Vérification rapide (toutes les 5s) pour le décompte et l'auto-fermeture de tous les accès."""
         now_local = dt_util.as_local(now)
+        gates = self.storage.get_gates()
 
-        # 1. Vérifier l'expiration du maintien ouvert temporisé
-        hold_until_str = cfg.get("hold_open_until")
-        if hold_until_str:
-            try:
-                hold_until_dt = datetime.fromisoformat(hold_until_str)
-                if hold_until_dt.tzinfo is None:
-                    hold_until_dt = dt_util.as_local(hold_until_dt)
-                if now_local >= hold_until_dt:
-                    _LOGGER.info("DomoLink-Portail: Expiration du maintien ouvert temporisé")
-                    await self.async_gate_set_hold_open(False)
-            except Exception as err:
-                _LOGGER.debug("Erreur parsing hold_open_until: %s", err)
+        for gid, cfg in gates.items():
+            st_mem = self._get_gate_internal_state(gid)
 
-        # 2. Vérifier si l'échéance de fermeture automatique est arrivée
-        target_iso = self._gate_state.get("target_close_time")
-        if (
-            target_iso
-            and cfg.get("enabled", True)
-            and not cfg.get("hold_open", False)
-            and not self._gate_state.get("check_in_progress", False)
-            and self._gate_state.get("state") in ("open", "obstacle")
-        ):
-            try:
-                target_dt = datetime.fromisoformat(target_iso)
-                if target_dt.tzinfo is None:
-                    target_dt = dt_util.as_local(target_dt)
-                if now_local >= target_dt:
-                    # Lancer le cycle de fermeture en tâche asynchrone non-bloquante
-                    self._gate_state["target_close_time"] = None
-                    if self._gate_task and not self._gate_task.done():
-                        self._gate_task.cancel()
-                    self._gate_task = self.hass.async_create_task(self.async_gate_close_cycle())
-            except Exception as err:
-                _LOGGER.error("DomoLink-Portail: Erreur tick fermeture auto: %s", err)
+            # 1. Vérifier l'expiration du maintien ouvert temporisé
+            hold_until_str = cfg.get("hold_open_until")
+            if hold_until_str:
+                try:
+                    hold_until_dt = datetime.fromisoformat(hold_until_str)
+                    if hold_until_dt.tzinfo is None:
+                        hold_until_dt = dt_util.as_local(hold_until_dt)
+                    if now_local >= hold_until_dt:
+                        _LOGGER.info("DomoLink-Accès [%s]: Expiration du maintien ouvert temporisé", gid)
+                        await self.async_gate_set_hold_open(False, gate_id=gid)
+                except Exception as err:
+                    _LOGGER.debug("Erreur parsing hold_open_until [%s]: %s", gid, err)
 
-        # 3. Rafraîchir l'état du portail pour le frontend
+            # 2. Vérifier si l'échéance de fermeture automatique est arrivée
+            target_iso = st_mem.get("target_close_time")
+            if (
+                target_iso
+                and cfg.get("enabled", True)
+                and not cfg.get("hold_open", False)
+                and not st_mem.get("check_in_progress", False)
+                and st_mem.get("state") in ("open", "obstacle")
+            ):
+                try:
+                    target_dt = datetime.fromisoformat(target_iso)
+                    if target_dt.tzinfo is None:
+                        target_dt = dt_util.as_local(target_dt)
+                    if now_local >= target_dt:
+                        st_mem["target_close_time"] = None
+                        if gid in self._gate_tasks and not self._gate_tasks[gid].done():
+                            self._gate_tasks[gid].cancel()
+                        self._gate_tasks[gid] = self.hass.async_create_task(self.async_gate_close_cycle(gate_id=gid))
+                except Exception as err:
+                    _LOGGER.error("DomoLink-Accès [%s]: Erreur tick fermeture auto: %s", gid, err)
+
+        # 3. Rafraîchir l'état pour le frontend
         self.data["gate"] = self.get_gate_status()
+        self.data["gates"] = self.get_all_gates_status()
         self.async_set_updated_data(self.data)
 
-    async def async_gate_close_cycle(self) -> None:
+    async def async_gate_close_cycle(self, gate_id: str | None = None) -> None:
         """Exécute le cycle complet : notification préalable, impulsion, vérification et réessais."""
-        cfg = self.storage.get_gate_config()
+        gates = self.storage.get_gates()
+        if not gate_id:
+            gate_id = next(iter(gates)) if gates else "gate_1"
+        cfg = self.storage.get_gate_config(gate_id)
+        st_mem = self._get_gate_internal_state(gate_id)
+        gate_name = cfg.get("name", "Portail")
+
         max_retries = int(cfg.get("max_retries", 6))
         check_delay = int(cfg.get("check_delay", 60))
         retry_interval = int(cfg.get("retry_interval_minutes", 10))
 
-        self._gate_state["check_in_progress"] = True
-        self._gate_state["state"] = "closing"
+        st_mem["check_in_progress"] = True
+        st_mem["state"] = "closing"
         now = dt_util.now()
-        self._gate_state["movement_start"] = now.isoformat()
-        current_retry = self._gate_state.get("retries_done", 0) + 1
+        st_mem["movement_start"] = now.isoformat()
+        current_retry = st_mem.get("retries_done", 0) + 1
 
-        _LOGGER.info("DomoLink-Portail: Démarrage cycle fermeture (Essai %d/%d)", current_retry, max_retries)
+        _LOGGER.info("DomoLink-Accès [%s]: Démarrage cycle fermeture (Essai %d/%d)", gate_name, current_retry, max_retries)
 
-        # 1. Envoi SMS d'avertissement
+        # 1. Envoi SMS / notification d'avertissement
         await self._async_send_gate_notification(
-            f"[Portail] Portail resté ouvert. Lancement de la fermeture automatique (Tentative {current_retry}/{max_retries})."
+            f"[{gate_name}] Resté ouvert. Lancement de la fermeture automatique (Tentative {current_retry}/{max_retries}).",
+            gate_id=gate_id,
         )
 
         # 2. Actionner la commande de fermeture selon le type
-        await self.async_gate_trigger_action(mode="close")
+        await self.async_gate_trigger_action(mode="close", gate_id=gate_id)
 
-        self._gate_state["last_action"] = f"Action de fermeture envoyée (Tentative {current_retry}/{max_retries})"
-        self._gate_state["last_action_time"] = now.isoformat()
+        st_mem["last_action"] = f"Action de fermeture envoyée (Tentative {current_retry}/{max_retries})"
+        st_mem["last_action_time"] = now.isoformat()
         self.data["gate"] = self.get_gate_status()
+        self.data["gates"] = self.get_all_gates_status()
         self.async_set_updated_data(self.data)
 
         # 3. Attente du temps de manœuvre (ex: 60 secondes)
@@ -946,75 +1007,85 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         now_after = dt_util.now()
 
         if not is_still_open:
-            # Succès : Le portail est bien fermé
-            self._gate_state["state"] = "closed"
-            self._gate_state["retries_done"] = 0
-            self._gate_state["check_in_progress"] = False
-            self._gate_state["target_close_time"] = None
-            self._gate_state["last_action"] = "Fermeture réussie confirmée"
-            self._gate_state["last_action_time"] = now_after.isoformat()
+            # Succès : Bien fermé
+            st_mem["state"] = "closed"
+            st_mem["retries_done"] = 0
+            st_mem["check_in_progress"] = False
+            st_mem["target_close_time"] = None
+            st_mem["last_action"] = "Fermeture réussie confirmée"
+            st_mem["last_action_time"] = now_after.isoformat()
 
-            await self._async_send_gate_notification("[Portail] Le portail est maintenant bien fermé.")
+            await self._async_send_gate_notification(f"[{gate_name}] Maintenant bien fermé et sécurisé.", gate_id=gate_id)
             await self.storage.async_add_gate_history({
                 "timestamp": now_after.isoformat(),
+                "gate_id": gate_id,
                 "event": "FERMETURE_AUTO",
                 "status": "SUCCESS",
-                "details": f"Fermeture automatique réussie à la tentative {current_retry}/{max_retries}",
+                "details": f"[{gate_name}] Fermeture automatique réussie à la tentative {current_retry}/{max_retries}",
             })
         else:
-            # Échec : Le portail est toujours ouvert (obstacle / blocage)
-            self._gate_state["retries_done"] = current_retry
-            self._gate_state["check_in_progress"] = False
+            # Échec : Toujours ouvert (obstacle / blocage)
+            st_mem["retries_done"] = current_retry
+            st_mem["check_in_progress"] = False
 
             if current_retry < max_retries:
-                # Alerte obstacle et programmation du réessai dans X minutes
-                self._gate_state["state"] = "obstacle"
-                self._gate_state["target_close_time"] = (now_after + timedelta(minutes=retry_interval)).isoformat()
-                self._gate_state["last_action"] = f"Obstacle détecté (Essai {current_retry}/{max_retries})"
-                self._gate_state["last_action_time"] = now_after.isoformat()
+                st_mem["state"] = "obstacle"
+                st_mem["target_close_time"] = (now_after + timedelta(minutes=retry_interval)).isoformat()
+                st_mem["last_action"] = f"Obstacle détecté (Essai {current_retry}/{max_retries})"
+                st_mem["last_action_time"] = now_after.isoformat()
 
                 await self._async_send_gate_notification(
-                    f"[Alerte Portail] Échec de fermeture (obstacle ou blocage détecté). Prochaine tentative dans {retry_interval} min (essai {current_retry}/{max_retries})."
+                    f"[Alerte {gate_name}] Échec de fermeture (obstacle détecté). Prochaine tentative dans {retry_interval} min (essai {current_retry}/{max_retries}).",
+                    gate_id=gate_id,
                 )
                 await self.storage.async_add_gate_history({
                     "timestamp": now_after.isoformat(),
+                    "gate_id": gate_id,
                     "event": "OBSTACLE",
                     "status": "RETRY_SCHEDULED",
-                    "details": f"Obstacle détecté, réessai {current_retry + 1}/{max_retries} dans {retry_interval} min",
+                    "details": f"[{gate_name}] Obstacle détecté, réessai {current_retry + 1}/{max_retries} dans {retry_interval} min",
                 })
             else:
-                # Échec final après max_retries : Alerte critique
-                self._gate_state["state"] = "obstacle"
-                self._gate_state["target_close_time"] = None
-                self._gate_state["last_action"] = f"URGENT: Échec après {max_retries} tentatives"
-                self._gate_state["last_action_time"] = now_after.isoformat()
+                st_mem["state"] = "obstacle"
+                st_mem["target_close_time"] = None
+                st_mem["last_action"] = f"URGENT: Échec après {max_retries} tentatives"
+                st_mem["last_action_time"] = now_after.isoformat()
 
                 await self._async_send_gate_notification(
-                    f"[URGENT] Le portail est toujours OUVERT après {max_retries} tentatives. Intervention manuelle requise !"
+                    f"[URGENT] {gate_name} est toujours OUVERT après {max_retries} tentatives. Intervention manuelle requise !",
+                    gate_id=gate_id,
                 )
                 await self.storage.async_add_gate_history({
                     "timestamp": now_after.isoformat(),
+                    "gate_id": gate_id,
                     "event": "ECHEC_CRITIQUE",
                     "status": "FAILED",
-                    "details": f"Arrêt d'urgence des fermetures automatiques après {max_retries} tentatives",
+                    "details": f"[{gate_name}] Arrêt d'urgence des fermetures automatiques après {max_retries} tentatives",
                 })
 
         self.data["gate"] = self.get_gate_status()
+        self.data["gates"] = self.get_all_gates_status()
         self.async_set_updated_data(self.data)
 
-    async def async_gate_trigger_action(self, mode: str = "toggle") -> bool:
-        """Déclenche la commande matérielle du portail selon le type d'interrupteur configuré."""
-        cfg = self.storage.get_gate_config()
+    async def async_gate_trigger_action(self, mode: str = "toggle", gate_id: str | None = None) -> bool:
+        """Déclenche la commande matérielle d'un accès selon le type d'interrupteur configuré."""
+        gates = self.storage.get_gates()
+        if not gate_id:
+            gate_id = next(iter(gates)) if gates else "gate_1"
+        cfg = self.storage.get_gate_config(gate_id)
+        st_mem = self._get_gate_internal_state(gate_id)
+        gate_name = cfg.get("name", "Accès")
+
         switch_type = cfg.get("switch_type", GATE_SWITCH_TYPE_PULSE)
         switch_entity = cfg.get("switch_entity")
         close_switch_entity = cfg.get("close_switch_entity")
         pedestrian_switch_entity = cfg.get("pedestrian_switch_entity")
         pulse_duration = float(cfg.get("pulse_duration", 1.0))
 
-        # Commande dédiée à l'accès piéton
+        # Commande dédiée à l'accès piéton / portillon
         if mode == "pedestrian":
             if not pedestrian_switch_entity:
-                _LOGGER.warning("DomoLink-Portail: Aucun switch configuré pour l'accès piéton")
+                _LOGGER.warning("DomoLink-Accès [%s]: Aucun switch configuré pour l'accès piéton", gate_name)
                 return False
             try:
                 targets = self._resolve_switch_entities(pedestrian_switch_entity)
@@ -1030,25 +1101,27 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             await self.hass.services.async_call(domain, "turn_off", {"entity_id": ent}, blocking=True)
 
                 now = dt_util.now()
-                self._gate_state["state"] = "opening"
-                self._gate_state["movement_start"] = now.isoformat()
-                self._gate_state["last_action"] = "Ouverture piéton en cours..."
-                self._gate_state["last_action_time"] = now.isoformat()
+                st_mem["state"] = "opening"
+                st_mem["movement_start"] = now.isoformat()
+                st_mem["last_action"] = "Ouverture piéton en cours..."
+                st_mem["last_action_time"] = now.isoformat()
                 self.data["gate"] = self.get_gate_status()
+                self.data["gates"] = self.get_all_gates_status()
                 self.async_set_updated_data(self.data)
                 await self.storage.async_add_gate_history({
                     "timestamp": now.isoformat(),
+                    "gate_id": gate_id,
                     "event": "OUVERTURE_PIETON",
                     "status": "PEDESTRIAN",
-                    "details": "Commande d'accès piéton déclenchée",
+                    "details": f"[{gate_name}] Commande d'accès piéton déclenchée",
                 })
                 return True
             except Exception as err:
-                _LOGGER.error("DomoLink-Portail: Erreur commande accès piéton: %s", err)
+                _LOGGER.error("DomoLink-Accès [%s]: Erreur commande accès piéton: %s", gate_name, err)
                 return False
 
         if not switch_entity:
-            _LOGGER.warning("DomoLink-Portail: Aucun switch configuré pour commander le portail")
+            _LOGGER.warning("DomoLink-Accès [%s]: Aucun switch configuré pour commander l'accès", gate_name)
             return False
 
         try:
@@ -1097,27 +1170,33 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     await self.hass.services.async_call(domain, action, {"entity_id": ent}, blocking=True)
 
             now = dt_util.now()
-            current_st = self._gate_state.get("state", "closed")
+            current_st = st_mem.get("state", "closed")
             if mode == "close" or (mode == "toggle" and current_st in ("open", "obstacle", "hold_open")):
-                self._gate_state["state"] = "closing"
-                self._gate_state["movement_start"] = now.isoformat()
-                self._gate_state["last_action"] = "Fermeture en cours..."
+                st_mem["state"] = "closing"
+                st_mem["movement_start"] = now.isoformat()
+                st_mem["last_action"] = "Fermeture en cours..."
             else:
-                self._gate_state["state"] = "opening"
-                self._gate_state["movement_start"] = now.isoformat()
-                self._gate_state["last_action"] = "Ouverture en cours..."
-            self._gate_state["last_action_time"] = now.isoformat()
+                st_mem["state"] = "opening"
+                st_mem["movement_start"] = now.isoformat()
+                st_mem["last_action"] = "Ouverture en cours..."
+            st_mem["last_action_time"] = now.isoformat()
             self.data["gate"] = self.get_gate_status()
+            self.data["gates"] = self.get_all_gates_status()
             self.async_set_updated_data(self.data)
 
             return True
         except Exception as err:
-            _LOGGER.error("DomoLink-Portail: Erreur lors de la commande du portail (%s): %s", switch_type, err)
+            _LOGGER.error("DomoLink-Accès [%s]: Erreur commande (%s): %s", gate_name, switch_type, err)
             return False
 
-    async def async_gate_set_hold_open(self, enabled: bool, duration_minutes: int | None = None) -> None:
-        """Active ou désactive le mode maintien ouvert (permanent ou temporisé)."""
-        cfg = self.storage.get_gate_config()
+    async def async_gate_set_hold_open(self, enabled: bool, duration_minutes: int | None = None, gate_id: str | None = None) -> None:
+        """Active ou désactive le mode maintien ouvert (permanent ou temporisé) pour un accès."""
+        gates = self.storage.get_gates()
+        if not gate_id:
+            gate_id = next(iter(gates)) if gates else "gate_1"
+        cfg = self.storage.get_gate_config(gate_id)
+        st_mem = self._get_gate_internal_state(gate_id)
+        gate_name = cfg.get("name", "Accès")
         now = dt_util.now()
 
         hold_until_iso = None
@@ -1126,44 +1205,44 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         cfg["hold_open"] = enabled
         cfg["hold_open_until"] = hold_until_iso
-        await self.storage.async_update_gate_config(cfg)
+        await self.storage.async_save_gate(gate_id, cfg)
 
         if enabled:
-            self._gate_state["target_close_time"] = None
-            if self._gate_state.get("state") == "open":
-                self._gate_state["state"] = "hold_open"
+            st_mem["target_close_time"] = None
+            if st_mem.get("state") == "open":
+                st_mem["state"] = "hold_open"
             desc = f"Maintien ouvert activé ({duration_minutes} min)" if duration_minutes else "Maintien ouvert permanent activé"
         else:
             desc = "Maintien ouvert désactivé"
-            # Si le portail est actuellement ouvert, relancer le timer
             sensor_id = cfg.get("sensor_entity")
             if sensor_id:
                 _, is_open = self._get_gate_sensor_resolved_state(sensor_id, cfg)
                 if is_open:
                     timer_min = self._get_current_timer_minutes(cfg, now)
-                    self._gate_state["state"] = "open"
-                    self._gate_state["target_close_time"] = (now + timedelta(minutes=timer_min)).isoformat()
+                    st_mem["state"] = "open"
+                    st_mem["target_close_time"] = (now + timedelta(minutes=timer_min)).isoformat()
 
         await self.storage.async_add_gate_history({
             "timestamp": now.isoformat(),
+            "gate_id": gate_id,
             "event": "MAINTIEN_OUVERT",
             "status": "ON" if enabled else "OFF",
-            "details": desc,
+            "details": f"[{gate_name}] {desc}",
         })
 
         self.data["gate"] = self.get_gate_status()
+        self.data["gates"] = self.get_all_gates_status()
         self.async_set_updated_data(self.data)
 
-    async def _async_send_gate_notification(self, message: str) -> None:
-        """Envoie une notification via le service configuré (Free SMS, HA Companion, etc.)."""
-        cfg = self.storage.get_gate_config()
+    async def _async_send_gate_notification(self, message: str, gate_id: str | None = None) -> None:
+        """Envoie une notification via le service configuré pour cet accès."""
+        cfg = self.storage.get_gate_config(gate_id)
         notify_service = cfg.get("notify_service")
         if not notify_service:
             return
 
-        _LOGGER.info("DomoLink-Portail: Envoi notification -> %s : %s", notify_service, message)
+        _LOGGER.info("DomoLink-Accès [%s]: Envoi notification -> %s : %s", cfg.get("name", gate_id), notify_service, message)
         try:
-            # Cas 1 : notify.send_message avec entity_id cible
             if notify_service.startswith("notify."):
                 await self.hass.services.async_call(
                     "notify",
@@ -1172,7 +1251,6 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     blocking=True,
                 )
             else:
-                # Cas 2 : appel de service direct (ex: free_mobile_sms)
                 domain = "notify"
                 service_name = notify_service.replace("notify.", "")
                 await self.hass.services.async_call(
@@ -1193,5 +1271,5 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     blocking=True,
                 )
             except Exception as fallback_err:
-                _LOGGER.error("DomoLink-Portail: Échec d'envoi notification (%s): %s", notify_service, fallback_err)
+                _LOGGER.error("DomoLink-Accès: Échec d'envoi notification (%s): %s", notify_service, fallback_err)
 
