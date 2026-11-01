@@ -1510,6 +1510,11 @@
       }
     }
 
+    _isModalOpen() {
+      if (!this.shadowRoot) return false;
+      return !!this.shadowRoot.querySelector(".modal-backdrop, .modal, #modal-gate-config, #automation-modal-container");
+    }
+
     connectedCallback() {
       if (typeof applySidebarBadge === "function") {
         applySidebarBadge();
@@ -1517,6 +1522,7 @@
       if (!this._gatePollTimer) {
         this._gatePollTimer = setInterval(() => {
           if (this._activeTab === "gate" && this._hass) {
+            if (this._isModalOpen()) return;
             this._fetchData();
           }
         }, 4000);
@@ -1540,6 +1546,7 @@
         const res = await this._hass.fetchWithAuth("/api/domolink_planification/data");
         if (res.ok) {
           this._data = await res.json();
+          if (this._isModalOpen()) return;
           this._render();
         }
       } catch (err) {
@@ -3203,18 +3210,17 @@
       if (existing) existing.remove();
 
       const modalEl = document.createElement("div");
-      modalEl.className = "modal";
+      modalEl.className = "modal-backdrop";
       modalEl.id = "modal-gate-config";
-      modalEl.style.display = "flex";
 
       modalEl.innerHTML = `
-        <div class="modal-content" style="max-width: 680px; max-height: 90vh; overflow-y: auto;">
-          <div class="modal-header">
+        <div class="modal" style="max-width: 680px; max-height: 90vh; overflow-y: auto;">
+          <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
             <h3 style="margin: 0; display: flex; align-items: center; gap: 8px;">
               <ha-icon icon="mdi:gate" style="color: #38bdf8;"></ha-icon>
               <span>${isNew ? "Ajouter un Nouvel Accès" : "Configurer l'Accès : " + escapeHtml(gData.name || '')}</span>
             </h3>
-            <button class="modal-close-btn" id="btn-close-gate-modal"><ha-icon icon="mdi:close"></ha-icon></button>
+            <button class="modal-close-btn" id="btn-close-gate-modal" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 20px;"><ha-icon icon="mdi:close"></ha-icon></button>
           </div>
 
           <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">

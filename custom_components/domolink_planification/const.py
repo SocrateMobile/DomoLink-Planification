@@ -9,7 +9,7 @@ NAME: Final = "DomoLink-Planification"
 try:
     VERSION: Final = json.loads((pathlib.Path(__file__).parent / "manifest.json").read_text(encoding="utf-8"))["version"]
 except Exception:
-    VERSION: Final = "3.2.0"
+    VERSION: Final = "3.2.1"
 
 
 # Panneau Lovelace & Frontend
