@@ -32,3 +32,16 @@ set_schedule_enabled:
       default: true
       selector:
         boolean:
+
+trigger_automation:
+  name: Déclencher une automatisation
+  description: Déclenche immédiatement une automatisation DomoLink (évalue les conditions et exécute les actions).
+  fields:
+    automation_id:
+      name: Identifiant de l'automatisation
+      description: ID de l'automatisation à exécuter.
+      required: true
+      example: "auto_1710920000"
+      selector:
+        text:
+

@@ -50,7 +50,9 @@ from .const import (
     TRIGGER_TYPE_SOLAR_SHADING,
     TRIGGER_TYPE_TIME,
 )
+from .automation_engine import AutomationEngine
 from .holidays import HolidayEngine
+
 from .recurrence import RecurrenceEngine
 from .solar_shading import SolarShadingEvaluator
 from .storage import PlanificationStorage
@@ -71,7 +73,9 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.storage = storage
         self.resolver = TargetResolver(hass)
+        self.automation_engine = AutomationEngine(hass, storage, self.resolver)
         self.solar_shading = SolarShadingEvaluator(hass)
+
         self._last_evaluated_minute: str | None = None
         self._solar_shading_states: dict[str, dict[str, Any]] = {}
         self._remove_timer: Any = None
@@ -97,6 +101,9 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # Initialiser l'état du portail depuis Home Assistant
         self._init_gate_state_from_sensor()
 
+        # Démarrer le moteur d'automatisations modernes
+        await self.automation_engine.async_start()
+
         self.data = {
             "schedules": self.storage.get_schedules(),
             "history": self.storage.get_history(),
@@ -104,6 +111,8 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "next_runs": self.compute_all_next_runs(),
             "solar_states": self._solar_shading_states,
             "gate": self.get_gate_status(),
+            "automations": self.storage.get_automations(),
+            "automation_traces": self.storage.get_automation_traces(),
         }
 
         # Démarrer la boucle périodique de vérification des plannings (chaque 30s)
@@ -167,6 +176,7 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def async_stop(self) -> None:
         """Arrête les boucles en arrière-plan."""
+        self.automation_engine.async_stop()
         if self._remove_timer:
             self._remove_timer()
             self._remove_timer = None
@@ -220,6 +230,8 @@ class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "solar_states": self._solar_shading_states,
             "gate": self.get_gate_status(),
             "labels": labels_list,
+            "automations": self.storage.get_automations(),
+            "automation_traces": self.storage.get_automation_traces(),
         }
 
     # -------------------------------------------------------------------------

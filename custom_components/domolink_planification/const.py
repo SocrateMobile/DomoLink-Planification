@@ -9,7 +9,8 @@ NAME: Final = "DomoLink-Planification"
 try:
     VERSION: Final = json.loads((pathlib.Path(__file__).parent / "manifest.json").read_text(encoding="utf-8"))["version"]
 except Exception:
-    VERSION: Final = "2.0.12"
+    VERSION: Final = "3.1.0"
+
 
 # Panneau Lovelace & Frontend
 PANEL_URL_PATH: Final = "domolink-planification"
@@ -172,4 +173,44 @@ DEFAULT_GATE_CONFIG: Final[dict[str, Any]] = {
     "hold_open": False,
     "hold_open_until": None,
 }
+
+# --- SECTION BRIQUE AUTOMATISATIONS MODERNES ---
+CONF_AUTOMATIONS: Final = "automations"
+CONF_AUTOMATION_TRACES: Final = "automation_traces"
+
+# Modes d'exécution des automatisations
+EXEC_MODE_SINGLE: Final = "single"      # Ignore si déjà en cours ou en période de debounce
+EXEC_MODE_RESTART: Final = "restart"    # Réinitialise et redémarre la séquence
+EXEC_MODE_QUEUED: Final = "queued"      # Met en file d'attente
+EXEC_MODE_PARALLEL: Final = "parallel"  # Exécute en parallèle
+
+# Types de déclencheurs pour les automatisations
+AUTO_TRIGGER_EVENT: Final = "event"                 # zha_event, deconz_event, custom
+AUTO_TRIGGER_BUTTON: Final = "button"               # Bouton Zigbee/Z2M universel
+AUTO_TRIGGER_STATE: Final = "state"                 # Changement d'état
+AUTO_TRIGGER_NUMERIC_STATE: Final = "numeric_state" # Seuil numérique (> ou <)
+AUTO_TRIGGER_TIME: Final = "time"                   # Heure fixe
+AUTO_TRIGGER_SOLAR: Final = "solar"                 # Lever / coucher de soleil
+AUTO_TRIGGER_ZONE: Final = "zone"                   # Entrée / sortie de zone
+AUTO_TRIGGER_WEBHOOK: Final = "webhook"             # Webhook ou appel externe
+
+# Types de conditions
+AUTO_COND_STATE: Final = "state"
+AUTO_COND_NUMERIC_STATE: Final = "numeric_state"
+AUTO_COND_TIME_WINDOW: Final = "time_window"
+AUTO_COND_HOLIDAY: Final = "holiday"
+AUTO_COND_PRESENCE: Final = "presence"
+AUTO_COND_ALARM: Final = "alarm"
+AUTO_COND_SUN: Final = "sun"
+AUTO_COND_AND: Final = "and"
+AUTO_COND_OR: Final = "or"
+AUTO_COND_NOT: Final = "not"
+
+# Types d'actions
+AUTO_ACTION_SERVICE: Final = "service"
+AUTO_ACTION_DEVICE: Final = "device"
+AUTO_ACTION_DELAY: Final = "delay"
+AUTO_ACTION_NOTIFICATION: Final = "notification"
+AUTO_ACTION_IF_THEN: Final = "if_then"
+
 
