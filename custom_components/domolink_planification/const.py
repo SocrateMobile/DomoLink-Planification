@@ -9,7 +9,7 @@ NAME: Final = "DomoLink-Planification"
 try:
     VERSION: Final = json.loads((pathlib.Path(__file__).parent / "manifest.json").read_text(encoding="utf-8"))["version"]
 except Exception:
-    VERSION: Final = "3.1.0"
+    VERSION: Final = "3.2.0"
 
 
 # Panneau Lovelace & Frontend
@@ -140,10 +140,12 @@ SHADING_MODE_WINTER: Final = "winter"  # Gain solaire passif
 STORAGE_KEY: Final = "domolink_planification_data"
 STORAGE_VERSION: Final = 1
 
-# Types de motorisation / architecture de portail
+# Types de motorisation / architecture de portail et accès
 GATE_TYPE_SLIDING: Final = "coulissant"          # Portail coulissant (1 vantail latéral)
 GATE_TYPE_DOUBLE_SWING: Final = "double_battant" # Portail battant double (2 vantaux)
 GATE_TYPE_SINGLE_SWING: Final = "simple_battant" # Portail battant simple (1 vantail)
+GATE_TYPE_DOOR: Final = "porte"                  # Porte / Portillon (battant piéton ou gâche)
+GATE_TYPE_GARAGE: Final = "garage"               # Porte de garage (sectionnelle ou basculante)
 
 # --- SECTION PORTAIL & ACCÈS ---
 GATE_SWITCH_TYPE_PULSE: Final = "pulse"    # Contact sec / impulsion unique
@@ -152,7 +154,10 @@ GATE_SWITCH_TYPE_COVER: Final = "cover"    # Entité cover existante
 GATE_SWITCH_TYPE_TOGGLE: Final = "toggle"  # Interrupteur bistable ON/OFF
 
 DEFAULT_GATE_CONFIG: Final[dict[str, Any]] = {
-    "enabled": False,
+    "id": "gate_1",
+    "name": "Portail Principal",
+    "enabled": True,
+
     "gate_type": GATE_TYPE_SLIDING,
     "travel_time": 15,
     "switch_type": GATE_SWITCH_TYPE_PULSE,

@@ -1146,6 +1146,164 @@
     .gate-type-simple_battant.state-hold_open .gate-single-leaf { transform: rotateY(85deg); }
     .gate-type-simple_battant.state-obstacle .gate-single-leaf { transform: rotateY(40deg); }
 
+    /* Switcher d'Accès Multiples (Portail, Porte, Garage...) */
+    .access-switcher-bar {
+      margin-bottom: 20px;
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      overflow-x: auto;
+    }
+    .access-tabs {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .access-tab-btn {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 8px 14px;
+      color: #94a3b8;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+    .access-tab-btn:hover {
+      background: rgba(51, 65, 85, 0.8);
+      color: #f8fafc;
+      border-color: rgba(56, 189, 248, 0.4);
+    }
+    .access-tab-btn.active {
+      background: linear-gradient(135deg, rgba(14, 165, 233, 0.25), rgba(59, 130, 246, 0.25));
+      border-color: #38bdf8;
+      color: #f0f9ff;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
+    }
+    .access-tab-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .access-tab-add {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: rgba(16, 185, 129, 0.35);
+      color: #34d399;
+    }
+    .access-tab-add:hover {
+      background: rgba(16, 185, 129, 0.3);
+      color: #a7f3d0;
+      border-color: #10b981;
+    }
+
+    /* Architecture et rendu PORTE / PORTILLON */
+    .gate-porte-casing {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 140px;
+      border: 3px solid #64748b;
+      border-bottom: none;
+      border-radius: 4px 4px 0 0;
+      background: rgba(15, 23, 42, 0.4);
+      z-index: 8;
+    }
+    .gate-porte-panel {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      transform-style: preserve-3d;
+      transform-origin: left center;
+      will-change: transform;
+      z-index: 9;
+      transition: transform 0.4s ease-out;
+    }
+    .gate-porte-inner {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      justify-content: space-around;
+      padding: 10px;
+    }
+    .gate-porte-window {
+      height: 35%;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 3px;
+    }
+    .gate-porte-recess {
+      height: 45%;
+      background: rgba(56, 189, 248, 0.05);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      border-radius: 3px;
+    }
+    .gate-type-porte.state-closed .gate-porte-panel { transform: rotateY(0deg); }
+    .gate-type-porte.state-open .gate-porte-panel { transform: rotateY(85deg); }
+    .gate-type-porte.state-hold_open .gate-porte-panel { transform: rotateY(85deg); }
+    .gate-type-porte.state-obstacle .gate-porte-panel { transform: rotateY(40deg); }
+
+    /* Architecture et rendu PORTE DE GARAGE */
+    .gate-garage-panel {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 100%;
+      transform-style: preserve-3d;
+      transform-origin: top center;
+      will-change: transform;
+      z-index: 8;
+      transition: transform 0.4s ease-out;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 2px 0;
+    }
+    .gate-garage-section {
+      height: 23%;
+      background: linear-gradient(180deg, #1e293b, #0f172a);
+      border: 1px solid #475569;
+      border-radius: 2px;
+      box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+      position: relative;
+    }
+    .gate-garage-window {
+      width: 25px;
+      height: 12px;
+      background: rgba(56, 189, 248, 0.2);
+      border: 1px solid rgba(56, 189, 248, 0.5);
+      border-radius: 2px;
+    }
+    .gate-garage-rib {
+      width: 70%;
+      height: 2px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 1px;
+    }
+    .gate-type-garage.state-closed .gate-garage-panel { transform: translateY(0%); }
+    .gate-type-garage.state-open .gate-garage-panel { transform: translateY(-88%); }
+    .gate-type-garage.state-hold_open .gate-garage-panel { transform: translateY(-88%); }
+    .gate-type-garage.state-obstacle .gate-garage-panel { transform: translateY(-45%); }
+
     /* Barre HUD de progression de manœuvre */
     .gate-hud-progress {
       position: absolute;
@@ -1881,11 +2039,13 @@
 
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
               <div class="form-group">
-                <label>Architecture & Type de Portail (Rendu 3D)</label>
+                <label>Architecture & Type de Portail / Accès (Rendu 3D)</label>
                 <select class="form-control" id="gate-cfg-type">
                   <option value="coulissant" ${(cfg.gate_type || 'coulissant') === 'coulissant' ? 'selected' : ''}>🚪 Portail Coulissant (1 vantail latéral)</option>
                   <option value="double_battant" ${cfg.gate_type === 'double_battant' ? 'selected' : ''}>🚪 Portail Battant Double (2 vantaux)</option>
                   <option value="simple_battant" ${cfg.gate_type === 'simple_battant' ? 'selected' : ''}>🚪 Portail Battant Simple (1 vantail)</option>
+                  <option value="porte" ${cfg.gate_type === 'porte' ? 'selected' : ''}>🚪 Porte / Portillon (battant piéton ou gâche)</option>
+                  <option value="garage" ${cfg.gate_type === 'garage' ? 'selected' : ''}>🏠 Porte de Garage (sectionnelle / basculante)</option>
                 </select>
                 <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Adapte le rendu 3D et le comportement de la manœuvre</div>
               </div>
@@ -2225,48 +2385,77 @@
     }
 
     _renderGateTabContent() {
-      const gate = this._data.gate || {};
-      const cfg = gate.config || {};
+      const gates = (this._data.gates && Object.keys(this._data.gates).length > 0)
+        ? this._data.gates
+        : (this._data.gate ? { [this._data.gate.id || 'gate_1']: this._data.gate } : { 'gate_1': { id: 'gate_1', name: 'Portail Principal', config: {} } });
+
+      const gateIds = Object.keys(gates);
+      let selectedId = this._selectedGateId;
+      if (!selectedId || !gates[selectedId]) {
+        selectedId = gateIds[0] || 'gate_1';
+        this._selectedGateId = selectedId;
+      }
+
+      const gate = gates[selectedId] || {};
+      const cfg = gate.config || gate;
       const state = gate.state || "closed";
       const gateType = cfg.gate_type || "coulissant";
+      const gateName = cfg.name || gate.name || "Portail Principal";
       const travelTime = parseInt(cfg.travel_time || "15", 10);
       const isAutoEnabled = cfg.enabled !== false;
       const isHoldOpen = gate.hold_open === true;
       const countdownSec = gate.countdown_seconds || 0;
       const countdownFormatted = this._formatGateCountdown(countdownSec);
 
+      let typeIcon = "mdi:gate";
+      let typeTitle = "Portail Coulissant";
+      if (gateType === "double_battant") {
+        typeIcon = "mdi:gate";
+        typeTitle = "Portail Battant Double";
+      } else if (gateType === "simple_battant") {
+        typeIcon = "mdi:gate";
+        typeTitle = "Portail Battant Simple";
+      } else if (gateType === "porte") {
+        typeIcon = "mdi:door";
+        typeTitle = "Porte / Portillon";
+      } else if (gateType === "garage") {
+        typeIcon = "mdi:garage";
+        typeTitle = "Porte de Garage";
+      }
+
       let badgeClass = "closed";
-      let badgeLabel = "Portail Sécurisé & Fermé";
-      let badgeIcon = "mdi:gate";
+      let badgeLabel = `${gateName} Sécurisé & Fermé`;
+      let badgeIcon = typeIcon;
 
       if (state === "opening") {
         badgeClass = "opening";
         badgeLabel = "🔄 Ouverture en cours...";
-        badgeIcon = "mdi:gate-arrow-left";
+        badgeIcon = (gateType === "garage") ? "mdi:arrow-up-bold" : "mdi:door-open";
       } else if (state === "open") {
         badgeClass = "open";
-        badgeLabel = isAutoEnabled ? "Portail Ouvert (Fermeture programmée)" : "Portail Ouvert (Fermeture auto désactivée)";
-        badgeIcon = "mdi:gate-open";
+        badgeLabel = isAutoEnabled ? "Ouvert (Fermeture programmée)" : "Ouvert (Fermeture auto désactivée)";
+        badgeIcon = (gateType === "garage") ? "mdi:garage-open" : "mdi:door-open";
       } else if (state === "closing") {
         badgeClass = "closing";
         badgeLabel = "🔄 Fermeture en cours...";
-        badgeIcon = "mdi:gate-arrow-right";
+        badgeIcon = (gateType === "garage") ? "mdi:arrow-down-bold" : "mdi:door-closed";
       } else if (state === "obstacle") {
         badgeClass = "obstacle";
-        badgeLabel = `⚠️ Obstacle Détecté (Essai ${gate.retries_done}/${gate.max_retries})`;
+        badgeLabel = `⚠️ Obstacle Détecté (Essai ${gate.retries_done || 0}/${gate.max_retries || 6})`;
         badgeIcon = "mdi:alert-octagon";
       } else if (state === "hold_open" || isHoldOpen) {
         badgeClass = "hold_open";
-        badgeLabel = "⏸️ Maintien Ouvert Actif (Fermeture en pause)";
+        badgeLabel = "⏸️ Maintien Ouvert Actif";
         badgeIcon = "mdi:lock-open-variant";
       }
 
-      const historyList = (this._data.gate_history || gate.history || []).slice(0, 10);
+      const allHistory = (this._data.gate_history || gate.history || []);
+      const historyList = allHistory.filter(h => !h.gate_id || h.gate_id === selectedId).slice(0, 10);
       const sceneStateClass = `gate-type-${gateType} ${state === "closed" ? "state-closed" : (state === "opening" ? "state-opening" : (state === "closing" ? "state-closing" : (state === "obstacle" ? "state-obstacle" : (isHoldOpen ? "state-hold_open" : "state-open"))))}`;
       const gateGlowColor = (state === "closed") ? "#10b981" : ((state === "opening" || state === "closing") ? "#f59e0b" : ((state === "obstacle") ? "#ef4444" : ((isHoldOpen) ? "#a855f7" : "#38bdf8")));
       const isMoving = state === "opening" || state === "closing";
 
-      // Génération de l'architecture physique du portail selon le type choisi
+      // Génération de l'architecture physique du portail / accès selon le type choisi
       let gateStageContent = "";
       if (gateType === "coulissant") {
         gateStageContent = `
@@ -2318,6 +2507,43 @@
             </div>
           </div>
         `;
+      } else if (gateType === "porte") {
+        gateStageContent = `
+          <div class="gate-ground-stopper" style="left: calc(50% + 65px);"></div>
+          <div class="gate-stage" style="perspective: 700px; display: flex; justify-content: center; align-items: flex-end;">
+            <div class="gate-porte-casing">
+              <div class="gate-porte-panel" id="gate-porte-panel">
+                <div class="gate-hinge top" style="left: -4px;"></div>
+                <div class="gate-hinge bottom" style="left: -4px;"></div>
+                <div class="gate-frame" style="padding: 10px; border-radius: 2px;">
+                  <div class="gate-porte-inner">
+                    <div class="gate-porte-window"></div>
+                    <div class="gate-porte-recess"></div>
+                  </div>
+                  <div class="gate-handle" style="right: 10px; width: 6px; height: 20px;"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (gateType === "garage") {
+        gateStageContent = `
+          <div class="gate-ground-stopper" style="display: none;"></div>
+          <div class="gate-stage" style="overflow: hidden; border-radius: 4px; border-bottom: 2px solid #64748b;">
+            <div class="gate-garage-panel" id="gate-garage-panel">
+              <div class="gate-garage-section">
+                <div class="gate-garage-window"></div>
+                <div class="gate-garage-window"></div>
+                <div class="gate-garage-window"></div>
+              </div>
+              <div class="gate-garage-section"><div class="gate-garage-rib"></div></div>
+              <div class="gate-garage-section">
+                <div class="gate-handle" style="position: static; transform: none; width: 28px; height: 6px; margin: 0 auto;"></div>
+              </div>
+              <div class="gate-garage-section"><div class="gate-garage-rib"></div></div>
+            </div>
+          </div>
+        `;
       } else {
         // double_battant (battants doubles ouvrant vers l'intérieur)
         gateStageContent = `
@@ -2360,23 +2586,53 @@
       }
 
       return `
+        <div class="access-switcher-bar">
+          <div class="access-tabs">
+            ${gateIds.map(gid => {
+              const g = gates[gid] || {};
+              const gcfg = g.config || g;
+              const gType = gcfg.gate_type || "coulissant";
+              const gState = g.state || "closed";
+              const isSel = gid === selectedId;
+              const icon = (gType === 'porte') ? 'mdi:door' : ((gType === 'garage') ? 'mdi:garage' : 'mdi:gate');
+              const stateColor = (gState === 'closed') ? '#10b981' : ((gState === 'opening' || gState === 'closing') ? '#f59e0b' : ((gState === 'obstacle') ? '#ef4444' : '#38bdf8'));
+              return `
+                <button class="access-tab-btn ${isSel ? 'active' : ''}" data-gate-id="${escapeHtml(gid)}">
+                  <ha-icon icon="${icon}" style="color: ${stateColor};"></ha-icon>
+                  <span class="access-tab-name">${escapeHtml(gcfg.name || gid)}</span>
+                  <span class="access-tab-dot" style="background: ${stateColor};"></span>
+                </button>
+              `;
+            }).join("")}
+            <button class="access-tab-btn access-tab-add" id="btn-add-gate-access" title="Ajouter un nouvel accès (portail, porte, garage)">
+              <ha-icon icon="mdi:plus-circle-outline"></ha-icon>
+              <span>Ajouter un Accès</span>
+            </button>
+          </div>
+        </div>
+
         <div class="gate-grid">
           <div class="gate-card">
             <div class="gate-hero-header">
               <div>
                 <h2 style="margin: 0; font-size: 20px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px;">
-                  <ha-icon icon="mdi:gate" style="color: ${gateGlowColor};"></ha-icon>
-                  <span>Contrôleur de Portail DomoLink</span>
+                  <ha-icon icon="${typeIcon}" style="color: ${gateGlowColor};"></ha-icon>
+                  <span>${escapeHtml(gateName)}</span>
                 </h2>
                 <div style="font-size: 13px; color: #94a3b8; margin-top: 4px;">
-                  Type : ${gateType === 'coulissant' ? 'Coulissant' : (gateType === 'simple_battant' ? 'Battant Simple' : 'Battant Double')} • Mode : ${gate.is_day ? "☀️ Jour (" + escapeHtml(String(cfg.timer_day_minutes || 10)) + " min)" : "🌙 Nuit (" + escapeHtml(String(cfg.timer_night_minutes || 3)) + " min)"}
+                  Type : ${typeTitle} • Mode : ${gate.is_day ? "☀️ Jour (" + escapeHtml(String(cfg.timer_day_minutes || 10)) + " min)" : "🌙 Nuit (" + escapeHtml(String(cfg.timer_night_minutes || 3)) + " min)"}
                 </div>
               </div>
-              <div style="display: flex; align-items: center; gap: 10px;">
-                <button class="gate-btn gate-btn-hold" id="btn-goto-gate-settings" title="Accéder à tous les réglages du portail" style="padding: 6px 14px; font-size: 13px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <button class="gate-btn gate-btn-hold" id="btn-edit-current-gate" title="Configurer cet élément d'accès" style="padding: 6px 12px; font-size: 13px;">
                   <ha-icon icon="mdi:cog-outline"></ha-icon>
-                  <span>Paramètres</span>
+                  <span>Configurer</span>
                 </button>
+                ${gateIds.length > 1 ? `
+                  <button class="gate-btn" id="btn-delete-current-gate" title="Supprimer cet élément d'accès" style="padding: 6px 10px; font-size: 13px; background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); color: #f87171;">
+                    <ha-icon icon="mdi:trash-can-outline"></ha-icon>
+                  </button>
+                ` : ''}
                 <div class="gate-badge ${badgeClass}" id="gate-badge-easter-egg" title="Cliquez 5 fois pour un clin d'œil spécial !">
                   <ha-icon icon="${badgeIcon}"></ha-icon>
                   <span>${badgeLabel}</span>
@@ -2416,7 +2672,7 @@
               </div>
               <div class="gate-countdown-lbl">
                 ${state === "closed" 
-                  ? "Portail fermé et sécurisé" 
+                  ? `${escapeHtml(gateName)} fermé(e) et sécurisé(e)` 
                   : (state === "opening"
                       ? "Course d'ouverture en cours..."
                       : (state === "closing"
@@ -2431,12 +2687,12 @@
 
             <div class="gate-btn-group">
               <button class="gate-btn gate-btn-primary" id="btn-gate-trigger">
-                <ha-icon icon="mdi:gate"></ha-icon>
-                <span>Actionner le Portail</span>
+                <ha-icon icon="${typeIcon}"></ha-icon>
+                <span>Actionner ${escapeHtml(gateName)}</span>
               </button>
 
               ${cfg.pedestrian_switch_entity ? `
-                <button class="gate-btn" style="background: rgba(168, 85, 247, 0.2); border-color: rgba(168, 85, 247, 0.5); color: #c084fc;" id="btn-gate-pedestrian" title="Ouvrir l'accès piéton">
+                <button class="gate-btn" style="background: rgba(168, 85, 247, 0.2); border-color: rgba(168, 85, 247, 0.5); color: #c084fc;" id="btn-gate-pedestrian" title="Ouvrir l'accès piéton / portillon">
                   <ha-icon icon="mdi:walk"></ha-icon>
                   <span>Accès Piéton</span>
                 </button>
@@ -2460,7 +2716,7 @@
                   <ha-icon icon="mdi:timer-outline"></ha-icon>
                   <span>1h</span>
                 </button>
-                <button class="gate-btn gate-btn-hold" id="btn-gate-hold-inf" title="Maintien permanent (travaux / fête)">
+                <button class="gate-btn gate-btn-hold" id="btn-gate-hold-inf" title="Maintien permanent">
                   <ha-icon icon="mdi:lock-open-variant"></ha-icon>
                   <span>Permanent</span>
                 </button>
@@ -2487,12 +2743,12 @@
           <div class="gate-card">
             <h3 style="margin-top: 0; margin-bottom: 16px; font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px;">
               <ha-icon icon="mdi:history"></ha-icon>
-              <span>Journal Récent du Portail</span>
+              <span>Journal Récent de l'Accès</span>
             </h3>
             <div style="max-height: 480px; overflow-y: auto;">
               ${historyList.length === 0 ? `
                 <div style="text-align: center; color: #94a3b8; padding: 40px 0; font-size: 13px;">
-                  Aucun événement enregistré pour le moment.
+                  Aucun événement enregistré pour cet accès.
                 </div>
               ` : historyList.map(h => {
                 const dateStr = h.timestamp ? new Date(h.timestamp).toLocaleTimeString() : "";
@@ -2510,52 +2766,77 @@
                 `;
               }).join("")}
             </div>
+          </div>
         </div>
       `;
     }
 
     _attachGateEvents() {
+      // 0. Onglets de sélection d'accès
+      this.shadowRoot.querySelectorAll(".access-tab-btn[data-gate-id]").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          const gid = e.currentTarget.dataset.gateId;
+          if (gid) {
+            this._selectedGateId = gid;
+            this._render();
+          }
+        });
+      });
+
+      // 0b. Bouton Ajouter un Accès
+      const btnAddAccess = this.shadowRoot.querySelector("#btn-add-gate-access");
+      if (btnAddAccess) {
+        btnAddAccess.addEventListener("click", () => this._openGateModal(null));
+      }
+
+      // 0c. Bouton Configurer l'accès actuel
+      const btnEditCurrent = this.shadowRoot.querySelector("#btn-edit-current-gate");
+      if (btnEditCurrent) {
+        btnEditCurrent.addEventListener("click", () => {
+          const gates = this._data.gates || {};
+          const g = gates[this._selectedGateId] || this._data.gate;
+          this._openGateModal(g);
+        });
+      }
+
+      // 0d. Bouton Supprimer l'accès actuel
+      const btnDeleteCurrent = this.shadowRoot.querySelector("#btn-delete-current-gate");
+      if (btnDeleteCurrent) {
+        btnDeleteCurrent.addEventListener("click", () => this._deleteGate(this._selectedGateId));
+      }
+
       // 1. Bouton Actionner
       const btnTrigger = this.shadowRoot.querySelector("#btn-gate-trigger");
-      if (btnTrigger) btnTrigger.addEventListener("click", () => this._gateAction("trigger"));
+      if (btnTrigger) btnTrigger.addEventListener("click", () => this._gateAction("trigger", null, this._selectedGateId));
 
       // 1b. Bouton Accès Piéton
       const btnPedestrian = this.shadowRoot.querySelector("#btn-gate-pedestrian");
-      if (btnPedestrian) btnPedestrian.addEventListener("click", () => this._gateAction("pedestrian"));
+      if (btnPedestrian) btnPedestrian.addEventListener("click", () => this._gateAction("pedestrian", null, this._selectedGateId));
 
       // 2. Bouton Fermer Maintenant
       const btnClose = this.shadowRoot.querySelector("#btn-gate-close");
-      if (btnClose) btnClose.addEventListener("click", () => this._gateAction("close_now"));
+      if (btnClose) btnClose.addEventListener("click", () => this._gateAction("close_now", null, this._selectedGateId));
 
       // 3. Boutons Maintien
       const btnHold15 = this.shadowRoot.querySelector("#btn-gate-hold-15");
-      if (btnHold15) btnHold15.addEventListener("click", () => this._gateAction("hold_open", 15));
+      if (btnHold15) btnHold15.addEventListener("click", () => this._gateAction("hold_open", 15, this._selectedGateId));
 
       const btnHold30 = this.shadowRoot.querySelector("#btn-gate-hold-30");
-      if (btnHold30) btnHold30.addEventListener("click", () => this._gateAction("hold_open", 30));
+      if (btnHold30) btnHold30.addEventListener("click", () => this._gateAction("hold_open", 30, this._selectedGateId));
 
       const btnHold60 = this.shadowRoot.querySelector("#btn-gate-hold-60");
-      if (btnHold60) btnHold60.addEventListener("click", () => this._gateAction("hold_open", 60));
+      if (btnHold60) btnHold60.addEventListener("click", () => this._gateAction("hold_open", 60, this._selectedGateId));
 
       const btnHoldInf = this.shadowRoot.querySelector("#btn-gate-hold-inf");
-      if (btnHoldInf) btnHoldInf.addEventListener("click", () => this._gateAction("hold_open", 0));
+      if (btnHoldInf) btnHoldInf.addEventListener("click", () => this._gateAction("hold_open", 0, this._selectedGateId));
 
       const btnCancelHold = this.shadowRoot.querySelector("#btn-gate-cancel-hold");
-      if (btnCancelHold) btnCancelHold.addEventListener("click", () => this._gateAction("cancel_hold_open"));
+      if (btnCancelHold) btnCancelHold.addEventListener("click", () => this._gateAction("cancel_hold_open", null, this._selectedGateId));
 
       // 4. Toggle Surveillance / Fermeture Automatique
       const toggleEnabled = this.shadowRoot.querySelector("#toggle-gate-enabled");
       if (toggleEnabled) {
-        toggleEnabled.addEventListener("change", () => this._gateAction("toggle_enabled"));
-      }
-
-      // 5. Raccourci vers l'onglet Paramètres
-      const btnGotoSettings = this.shadowRoot.querySelector("#btn-goto-gate-settings");
-      if (btnGotoSettings) {
-        btnGotoSettings.addEventListener("click", () => {
-          this._activeTab = "settings";
-          this._render();
-        });
+        toggleEnabled.addEventListener("change", () => this._gateAction("toggle_enabled", null, this._selectedGateId));
       }
 
       // 6. Easter Egg
@@ -2585,8 +2866,10 @@
         this._gateAnimInterval = null;
       }
 
-      const gate = this._data.gate || {};
-      const cfg = gate.config || {};
+      const gates = this._data.gates || {};
+      const selectedId = this._selectedGateId || (this._data.gate ? this._data.gate.id : 'gate_1');
+      const gate = gates[selectedId] || this._data.gate || {};
+      const cfg = gate.config || gate;
       const state = gate.state || "closed";
       const gateType = cfg.gate_type || "coulissant";
       const travelTime = parseInt(cfg.travel_time || "15", 10);
@@ -2650,6 +2933,18 @@
           if (leaf) {
             const deg = state === "opening" ? fraction * 85 : (1 - fraction) * 85;
             leaf.style.transform = `rotateY(${deg}deg)`;
+          }
+        } else if (gateType === "porte") {
+          const panel = sr.querySelector("#gate-porte-panel");
+          if (panel) {
+            const deg = state === "opening" ? fraction * 85 : (1 - fraction) * 85;
+            panel.style.transform = `rotateY(${deg}deg)`;
+          }
+        } else if (gateType === "garage") {
+          const panel = sr.querySelector("#gate-garage-panel");
+          if (panel) {
+            const shift = state === "opening" ? fraction * 88 : (1 - fraction) * 88;
+            panel.style.transform = `translateY(-${shift}%)`;
           }
         }
 
@@ -2777,10 +3072,11 @@
       if (btnCopyCard) btnCopyCard.addEventListener("click", () => this._copyLovelaceCardCode());
     }
 
-    async _gateAction(action, durationMinutes = null) {
+    async _gateAction(action, durationMinutes = null, gateId = null) {
       if (!this._hass) return;
       try {
-        const body = { action };
+        const targetGateId = gateId || this._selectedGateId || (this._data.gate ? this._data.gate.id : 'gate_1');
+        const body = { action, gate_id: targetGateId };
         if (durationMinutes !== null) body.duration_minutes = durationMinutes;
         const res = await this._hass.fetchWithAuth("/api/domolink_planification/gate_action", {
           method: "POST",
@@ -2789,11 +3085,12 @@
         if (res.ok) {
           const data = await res.json();
           if (data.gate) this._data.gate = data.gate;
-          this._showToast("⚡ Commande envoyée au portail !");
+          if (data.gates) this._data.gates = data.gates;
+          this._showToast("⚡ Commande envoyée avec succès !");
           await this._fetchData();
         }
       } catch (err) {
-        console.error("Erreur action portail:", err);
+        console.error("Erreur action accès:", err);
         this._showToast("❌ Erreur lors de l'envoi de la commande.");
       }
     }
@@ -2801,7 +3098,10 @@
     async _saveGateConfig() {
       if (!this._hass) return;
       const sr = this.shadowRoot;
+      const gid = this._selectedGateId || (this._data.gate ? this._data.gate.id : "gate_1");
       const config = {
+        id: gid,
+        name: sr.querySelector("#gate-cfg-name")?.value?.trim() || "Portail Principal",
         enabled: sr.querySelector("#gate-cfg-enabled") ? sr.querySelector("#gate-cfg-enabled").checked : true,
         gate_type: sr.querySelector("#gate-cfg-type")?.value || "coulissant",
         travel_time: parseInt(sr.querySelector("#gate-cfg-travel-time")?.value || "15", 10),
@@ -2831,15 +3131,386 @@
         if (res.ok) {
           const data = await res.json();
           if (data.gate) this._data.gate = data.gate;
-          this._showToast("✅ Paramètres du portail enregistrés avec succès !");
+          if (data.gates) this._data.gates = data.gates;
+          this._showToast("✅ Paramètres enregistrés avec succès !");
           await this._fetchData();
         } else {
-          this._showToast("❌ Erreur lors de l'enregistrement du portail.");
+          this._showToast("❌ Erreur lors de l'enregistrement de l'accès.");
         }
       } catch (err) {
-        console.error("Erreur sauvegarde config portail:", err);
+        console.error("Erreur sauvegarde config accès:", err);
         this._showToast("❌ Erreur de communication.");
       }
+    }
+
+    async _deleteGate(gateId) {
+      if (!confirm("Voulez-vous vraiment supprimer cet élément d'accès ?")) return;
+      try {
+        const res = await this._hass.fetchWithAuth("/api/domolink_planification/delete_gate", {
+          method: "POST",
+          body: JSON.stringify({ id: gateId }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.gates) this._data.gates = data.gates;
+          const remainingIds = Object.keys(data.gates || {});
+          this._selectedGateId = remainingIds[0] || "gate_1";
+          this._showToast("🗑️ Élément d'accès supprimé avec succès.");
+          await this._fetchData();
+        } else {
+          this._showToast("❌ Erreur lors de la suppression de l'accès.");
+        }
+      } catch (err) {
+        console.error("Erreur suppression accès:", err);
+        this._showToast("❌ Erreur de communication.");
+      }
+    }
+
+    _openGateModal(gate = null) {
+      const defaultGate = {
+        id: `gate_${Date.now()}`,
+        name: "Nouvel Accès",
+        enabled: true,
+        gate_type: "coulissant",
+        travel_time: 15,
+        switch_type: "pulse",
+        switch_entity: "",
+        close_switch_entity: "",
+        pedestrian_switch_entity: "",
+        pulse_duration: 1.0,
+        sensor_entity: "",
+        sensor_inverted: false,
+        notify_service: "",
+        notify_on_close_success: true,
+        timer_day_minutes: 10,
+        timer_night_minutes: 3,
+        day_start: "07:00",
+        night_start: "22:00",
+        max_retries: 6,
+        check_delay: 60,
+        retry_interval_minutes: 10,
+      };
+
+      const gData = gate ? JSON.parse(JSON.stringify(gate.config || gate)) : defaultGate;
+      if (!gData.id) gData.id = gate ? (gate.id || "gate_1") : defaultGate.id;
+      if (!gData.name) gData.name = gate ? (gate.name || "Portail Principal") : defaultGate.name;
+
+      this._renderGateConfigModal(gData, !gate);
+    }
+
+    _renderGateConfigModal(gData, isNew) {
+      const existing = this.shadowRoot.querySelector("#modal-gate-config");
+      if (existing) existing.remove();
+
+      const modalEl = document.createElement("div");
+      modalEl.className = "modal";
+      modalEl.id = "modal-gate-config";
+      modalEl.style.display = "flex";
+
+      modalEl.innerHTML = `
+        <div class="modal-content" style="max-width: 680px; max-height: 90vh; overflow-y: auto;">
+          <div class="modal-header">
+            <h3 style="margin: 0; display: flex; align-items: center; gap: 8px;">
+              <ha-icon icon="mdi:gate" style="color: #38bdf8;"></ha-icon>
+              <span>${isNew ? "Ajouter un Nouvel Accès" : "Configurer l'Accès : " + escapeHtml(gData.name || '')}</span>
+            </h3>
+            <button class="modal-close-btn" id="btn-close-gate-modal"><ha-icon icon="mdi:close"></ha-icon></button>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 16px; margin-top: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(30,41,59,0.5); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+              <div>
+                <span style="font-weight: 600; font-size: 14px;">Surveillance & Fermeture Automatique</span>
+                <div style="font-size: 12px; color: #94a3b8;">Active la détection d'oubli et le cycle automatique</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="modal-gate-enabled" ${gData.enabled !== false ? 'checked' : ''}>
+                <span class="slider"></span>
+              </label>
+            </div>
+
+            <div class="form-group">
+              <label>Nom de l'accès</label>
+              <input type="text" class="form-control" id="modal-gate-name" value="${escapeHtml(gData.name || '')}" placeholder="Ex: Portail Principal, Portillon, Porte de Garage...">
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div class="form-group">
+                <label>Architecture & Type d'Ouverture (3D)</label>
+                <select class="form-control" id="modal-gate-type">
+                  <option value="coulissant" ${(gData.gate_type || 'coulissant') === 'coulissant' ? 'selected' : ''}>🚪 Portail Coulissant (1 vantail latéral)</option>
+                  <option value="double_battant" ${gData.gate_type === 'double_battant' ? 'selected' : ''}>🚪 Portail Battant Double (2 vantaux)</option>
+                  <option value="simple_battant" ${gData.gate_type === 'simple_battant' ? 'selected' : ''}>🚪 Portail Battant Simple (1 vantail)</option>
+                  <option value="porte" ${gData.gate_type === 'porte' ? 'selected' : ''}>🚪 Porte / Portillon (battant piéton ou gâche)</option>
+                  <option value="garage" ${gData.gate_type === 'garage' ? 'selected' : ''}>🏠 Porte de Garage (sectionnelle / basculante)</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label>Durée de Course / Manœuvre (secondes)</label>
+                <input type="number" min="3" max="180" step="1" class="form-control" id="modal-gate-travel-time" value="${escapeHtml(String(gData.travel_time ?? 15))}">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Type de Commande</label>
+              <select class="form-control" id="modal-gate-switch-type">
+                <option value="pulse" ${(gData.switch_type || 'pulse') === 'pulse' ? 'selected' : ''}>Contact sec / Impulsion unique (Shelly, relais...)</option>
+                <option value="dual" ${gData.switch_type === 'dual' ? 'selected' : ''}>Commandes séparées (Switch Ouvrir + Switch Fermer)</option>
+                <option value="cover" ${gData.switch_type === 'cover' ? 'selected' : ''}>Entité Cover native (cover.*)</option>
+                <option value="toggle" ${gData.switch_type === 'toggle' ? 'selected' : ''}>Interrupteur bistable ON/OFF</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label>Entité ou Étiquette Commande Principale</label>
+              <div class="ac-wrapper" id="ac-modal-gate-switch-wrapper">
+                <div class="ac-input-group">
+                  <input type="text" class="form-control" id="modal-gate-switch-entity" value="${escapeHtml(gData.switch_entity || '')}" placeholder="Rechercher switch, cover ou tag...">
+                  <div class="ac-controls">
+                    <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
+                    <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
+                  </div>
+                </div>
+                <div class="ac-dropdown" id="ac-modal-gate-switch-dropdown"></div>
+                <div class="ac-selection-hint" id="ac-modal-gate-switch-hint"></div>
+              </div>
+            </div>
+
+            <div class="form-group" id="modal-gate-dual-group" style="${gData.switch_type === 'dual' ? '' : 'display:none;'}">
+              <label>Entité Dédiée à la Fermeture (Commandes séparées)</label>
+              <div class="ac-wrapper" id="ac-modal-gate-close-switch-wrapper">
+                <div class="ac-input-group">
+                  <input type="text" class="form-control" id="modal-gate-close-switch-entity" value="${escapeHtml(gData.close_switch_entity || '')}" placeholder="Rechercher switch fermeture...">
+                  <div class="ac-controls">
+                    <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
+                    <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
+                  </div>
+                </div>
+                <div class="ac-dropdown" id="ac-modal-gate-close-switch-dropdown"></div>
+                <div class="ac-selection-hint" id="ac-modal-gate-close-switch-hint"></div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Entité Commande Piéton / Portillon (Optionnel)</label>
+              <div class="ac-wrapper" id="ac-modal-gate-pedestrian-wrapper">
+                <div class="ac-input-group">
+                  <input type="text" class="form-control" id="modal-gate-pedestrian-entity" value="${escapeHtml(gData.pedestrian_switch_entity || '')}" placeholder="Rechercher switch piéton...">
+                  <div class="ac-controls">
+                    <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
+                    <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
+                  </div>
+                </div>
+                <div class="ac-dropdown" id="ac-modal-gate-pedestrian-dropdown"></div>
+                <div class="ac-selection-hint" id="ac-modal-gate-pedestrian-hint"></div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Capteur de Position / État (Magnétique, Contacteur)</label>
+              <div class="ac-wrapper" id="ac-modal-gate-sensor-wrapper">
+                <div class="ac-input-group">
+                  <input type="text" class="form-control" id="modal-gate-sensor-entity" value="${escapeHtml(gData.sensor_entity || '')}" placeholder="Rechercher binary_sensor...">
+                  <div class="ac-controls">
+                    <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
+                    <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
+                  </div>
+                </div>
+                <div class="ac-dropdown" id="ac-modal-gate-sensor-dropdown"></div>
+                <div class="ac-selection-hint" id="ac-modal-gate-sensor-hint"></div>
+              </div>
+              <div style="margin-top: 6px; display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="modal-gate-sensor-inverted" ${gData.sensor_inverted ? 'checked' : ''}>
+                <label for="modal-gate-sensor-inverted" style="margin: 0; font-size: 12px; cursor: pointer;">Inverser la logique (cocher si le capteur est 'off' quand l'accès est ouvert)</label>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div class="form-group">
+                <label>Temporisation Jour (minutes)</label>
+                <input type="number" min="1" max="180" class="form-control" id="modal-gate-timer-day" value="${escapeHtml(String(gData.timer_day_minutes ?? 10))}">
+              </div>
+              <div class="form-group">
+                <label>Temporisation Nuit (minutes)</label>
+                <input type="number" min="1" max="60" class="form-control" id="modal-gate-timer-night" value="${escapeHtml(String(gData.timer_night_minutes ?? 3))}">
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+              <div class="form-group">
+                <label>Heure Début Jour</label>
+                <input type="time" class="form-control" id="modal-gate-day-start" value="${escapeHtml(gData.day_start || '07:00')}">
+              </div>
+              <div class="form-group">
+                <label>Heure Début Nuit</label>
+                <input type="time" class="form-control" id="modal-gate-night-start" value="${escapeHtml(gData.night_start || '22:00')}">
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+              <div class="form-group">
+                <label>Tentatives max</label>
+                <input type="number" min="1" max="20" class="form-control" id="modal-gate-max-retries" value="${escapeHtml(String(gData.max_retries ?? 6))}">
+              </div>
+              <div class="form-group">
+                <label>Délai vérif (s)</label>
+                <input type="number" min="5" max="180" class="form-control" id="modal-gate-check-delay" value="${escapeHtml(String(gData.check_delay ?? 60))}">
+              </div>
+              <div class="form-group">
+                <label>Réessai (min)</label>
+                <input type="number" min="1" max="60" class="form-control" id="modal-gate-retry-interval" value="${escapeHtml(String(gData.retry_interval_minutes ?? 10))}">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Service de Notification d'alerte (Optionnel)</label>
+              <div class="ac-wrapper" id="ac-modal-gate-notify-wrapper">
+                <div class="ac-input-group">
+                  <input type="text" class="form-control" id="modal-gate-notify-service" value="${escapeHtml(gData.notify_service || '')}" placeholder="Ex: notify.notify, mobile_app...">
+                  <div class="ac-controls">
+                    <button type="button" class="ac-btn ac-clear-btn" title="Effacer"><ha-icon icon="mdi:close-circle"></ha-icon></button>
+                    <button type="button" class="ac-btn ac-toggle-btn" title="Afficher la liste"><ha-icon icon="mdi:chevron-down"></ha-icon></button>
+                  </div>
+                </div>
+                <div class="ac-dropdown" id="ac-modal-gate-notify-dropdown"></div>
+                <div class="ac-selection-hint" id="ac-modal-gate-notify-hint"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer" style="margin-top: 24px; display: flex; justify-content: flex-end; gap: 10px;">
+            <button class="btn btn-secondary" id="btn-cancel-gate-modal">Annuler</button>
+            <button class="btn btn-primary" id="btn-save-gate-modal">
+              <ha-icon icon="mdi:check"></ha-icon>
+              <span>Enregistrer l'Accès</span>
+            </button>
+          </div>
+        </div>
+      `;
+
+      this.shadowRoot.appendChild(modalEl);
+
+      // Fermeture du modal
+      const closeModal = () => modalEl.remove();
+      modalEl.querySelector("#btn-close-gate-modal")?.addEventListener("click", closeModal);
+      modalEl.querySelector("#btn-cancel-gate-modal")?.addEventListener("click", closeModal);
+      modalEl.addEventListener("click", (e) => {
+        if (e.target === modalEl) closeModal();
+      });
+
+      // Toggle dual switch visibility
+      const switchTypeSelect = modalEl.querySelector("#modal-gate-switch-type");
+      const dualGroup = modalEl.querySelector("#modal-gate-dual-group");
+      if (switchTypeSelect && dualGroup) {
+        switchTypeSelect.addEventListener("change", (e) => {
+          dualGroup.style.display = e.target.value === "dual" ? "block" : "none";
+        });
+      }
+
+      // Initialiser autocomplétions
+      const switchList = this._buildEntityAndLabelList(["switch", "cover", "input_boolean", "light", "button"], true);
+      const sensorList = this._buildEntityAndLabelList(["binary_sensor", "sensor", "input_boolean", "cover"], true);
+      const allEntitiesList = this._buildEntityAndLabelList(null, false);
+
+      this._setupEntityAutocomplete(modalEl, {
+        inputId: "modal-gate-switch-entity",
+        dropdownId: "ac-modal-gate-switch-dropdown",
+        hintId: "ac-modal-gate-switch-hint",
+        entities: switchList,
+        fallbackEntities: allEntitiesList,
+      });
+
+      this._setupEntityAutocomplete(modalEl, {
+        inputId: "modal-gate-close-switch-entity",
+        dropdownId: "ac-modal-gate-close-switch-dropdown",
+        hintId: "ac-modal-gate-close-switch-hint",
+        entities: switchList,
+        fallbackEntities: allEntitiesList,
+      });
+
+      this._setupEntityAutocomplete(modalEl, {
+        inputId: "modal-gate-pedestrian-entity",
+        dropdownId: "ac-modal-gate-pedestrian-dropdown",
+        hintId: "ac-modal-gate-pedestrian-hint",
+        entities: switchList,
+        fallbackEntities: allEntitiesList,
+      });
+
+      this._setupEntityAutocomplete(modalEl, {
+        inputId: "modal-gate-sensor-entity",
+        dropdownId: "ac-modal-gate-sensor-dropdown",
+        hintId: "ac-modal-gate-sensor-hint",
+        entities: sensorList,
+        fallbackEntities: allEntitiesList,
+      });
+
+      const notifyServices = [];
+      const services = (this._hass && this._hass.services) ? this._hass.services : {};
+      if (services.notify) {
+        for (const s of Object.keys(services.notify)) {
+          notifyServices.push({
+            id: `notify.${s}`,
+            name: `Service Notify: ${s}`,
+            state: "Service",
+          });
+        }
+      }
+      this._setupEntityAutocomplete(modalEl, {
+        inputId: "modal-gate-notify-service",
+        dropdownId: "ac-modal-gate-notify-dropdown",
+        hintId: "ac-modal-gate-notify-hint",
+        entities: notifyServices,
+        fallbackEntities: allEntitiesList,
+      });
+
+      // Enregistrement
+      modalEl.querySelector("#btn-save-gate-modal")?.addEventListener("click", async () => {
+        const config = {
+          id: gData.id,
+          name: modalEl.querySelector("#modal-gate-name")?.value?.trim() || gData.name,
+          enabled: modalEl.querySelector("#modal-gate-enabled") ? modalEl.querySelector("#modal-gate-enabled").checked : true,
+          gate_type: modalEl.querySelector("#modal-gate-type")?.value || "coulissant",
+          travel_time: parseInt(modalEl.querySelector("#modal-gate-travel-time")?.value || "15", 10),
+          switch_type: modalEl.querySelector("#modal-gate-switch-type")?.value || "pulse",
+          switch_entity: modalEl.querySelector("#modal-gate-switch-entity")?.value?.trim() || "",
+          close_switch_entity: modalEl.querySelector("#modal-gate-close-switch-entity")?.value?.trim() || "",
+          pedestrian_switch_entity: modalEl.querySelector("#modal-gate-pedestrian-entity")?.value?.trim() || "",
+          pulse_duration: parseFloat(gData.pulse_duration || 1.0),
+          sensor_entity: modalEl.querySelector("#modal-gate-sensor-entity")?.value?.trim() || "",
+          sensor_inverted: modalEl.querySelector("#modal-gate-sensor-inverted")?.checked || false,
+          notify_service: modalEl.querySelector("#modal-gate-notify-service")?.value?.trim() || "",
+          notify_on_close_success: gData.notify_on_close_success !== false,
+          timer_day_minutes: parseInt(modalEl.querySelector("#modal-gate-timer-day")?.value || "10", 10),
+          timer_night_minutes: parseInt(modalEl.querySelector("#modal-gate-timer-night")?.value || "3", 10),
+          day_start: modalEl.querySelector("#modal-gate-day-start")?.value || "07:00",
+          night_start: modalEl.querySelector("#modal-gate-night-start")?.value || "22:00",
+          max_retries: parseInt(modalEl.querySelector("#modal-gate-max-retries")?.value || "6", 10),
+          check_delay: parseInt(modalEl.querySelector("#modal-gate-check-delay")?.value || "60", 10),
+          retry_interval_minutes: parseInt(modalEl.querySelector("#modal-gate-retry-interval")?.value || "10", 10),
+        };
+
+        try {
+          const res = await this._hass.fetchWithAuth("/api/domolink_planification/save_gate_config", {
+            method: "POST",
+            body: JSON.stringify(config),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.gate) this._data.gate = data.gate;
+            if (data.gates) this._data.gates = data.gates;
+            this._selectedGateId = config.id;
+            modalEl.remove();
+            this._showToast(isNew ? "✨ Nouvel accès créé avec succès !" : "✅ Paramètres de l'accès mis à jour !");
+            await this._fetchData();
+          } else {
+            this._showToast("❌ Erreur lors de l'enregistrement de l'accès.");
+          }
+        } catch (err) {
+          console.error("Erreur enregistrement accès:", err);
+          this._showToast("❌ Erreur de communication.");
+        }
+      });
     }
 
     async _saveGeneralSettings() {
