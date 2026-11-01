@@ -1,4 +1,4 @@
-"""Entités Bouton pour DomoLink-Planification (Test manuel immédiat)."""
+"""Entités Bouton pour DomoLink-Planification (Test manuel immédiat, Automatisations & Accès)."""
 
 from __future__ import annotations
 
@@ -25,8 +25,10 @@ async def async_setup_entry(
     """Configure les entités button depuis une ConfigEntry."""
     coordinator: DomolinkPlanificationCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     added_ids: set[str] = set()
+    added_auto_ids: set[str] = set()
+    added_gate_ids: set[str] = {"gate_1"}
 
-    # Bouton global de réévaluation des volets et boutons portail
+    # Bouton global de réévaluation des volets et boutons portail principal
     async_add_entities([
         PlanificationSolarRefreshButton(coordinator, entry),
         GateTriggerButton(coordinator, entry),
@@ -37,11 +39,26 @@ async def async_setup_entry(
     @callback
     def _update_entities() -> None:
         schedules = coordinator.storage.get_schedules()
-        new_buttons = []
+        new_buttons: list[ButtonEntity] = []
         for sched_id in schedules:
             if sched_id not in added_ids:
                 added_ids.add(sched_id)
                 new_buttons.append(PlanificationTriggerNowButton(coordinator, entry, sched_id))
+
+        automations = coordinator.storage.get_automations()
+        for auto_id in automations:
+            if auto_id not in added_auto_ids:
+                added_auto_ids.add(auto_id)
+                new_buttons.append(AutomationTriggerButton(coordinator, entry, auto_id))
+
+        gates = coordinator.storage.get_gates()
+        for gate_id in gates:
+            if gate_id not in added_gate_ids:
+                added_gate_ids.add(gate_id)
+                new_buttons.append(GateTriggerButton(coordinator, entry, gate_id=gate_id))
+                new_buttons.append(GateCloseButton(coordinator, entry, gate_id=gate_id))
+                new_buttons.append(GatePedestrianButton(coordinator, entry, gate_id=gate_id))
+
         if new_buttons:
             async_add_entities(new_buttons)
 
@@ -86,6 +103,47 @@ class PlanificationTriggerNowButton(CoordinatorEntity[DomolinkPlanificationCoord
         }
 
 
+class AutomationTriggerButton(CoordinatorEntity[DomolinkPlanificationCoordinator], ButtonEntity):
+    """Bouton pour exécuter manuellement une automatisation DomoLink."""
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:flash-outline"
+
+    def __init__(
+        self,
+        coordinator: DomolinkPlanificationCoordinator,
+        entry: ConfigEntry,
+        automation_id: str,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entry = entry
+        self.automation_id = automation_id
+        self._attr_unique_id = f"domolink_automation_trigger_btn_{automation_id}"
+
+    @property
+    def name(self) -> str:
+        auto = self.coordinator.storage.get_automation(self.automation_id) or {}
+        base_name = auto.get("name", self.automation_id)
+        return f"Automatisation {base_name} Exécuter"
+
+    async def async_press(self) -> None:
+        """Exécute l'automatisation immédiatement."""
+        auto = self.coordinator.storage.get_automation(self.automation_id)
+        if auto:
+            await self.coordinator.automation_engine._async_run_automation_flow(
+                self.automation_id, auto, {"trigger_type": "button_entity"}
+            )
+
+    @property
+    def device_info(self) -> dict[str, Any]:
+        return {
+            "identifiers": {(DOMAIN, "hub")},
+            "name": NAME,
+            "manufacturer": "DomoLink",
+            "model": "Planification & Suivi Solaire",
+        }
+
+
 class PlanificationSolarRefreshButton(CoordinatorEntity[DomolinkPlanificationCoordinator], ButtonEntity):
     """Bouton pour forcer la réévaluation immédiate de tous les volets solaires."""
 
@@ -100,7 +158,6 @@ class PlanificationSolarRefreshButton(CoordinatorEntity[DomolinkPlanificationCoo
 
     async def async_press(self) -> None:
         """Force la réévaluation des volets solaires."""
-        now = self.coordinator.hass.util.dt.now() if hasattr(self.coordinator.hass.util, "dt") else None
         from homeassistant.util import dt as dt_util
         await self.coordinator._evaluate_solar_shading_rules(dt_util.now())
         self.coordinator.async_set_updated_data(await self.coordinator._async_update_data())
@@ -116,20 +173,38 @@ class PlanificationSolarRefreshButton(CoordinatorEntity[DomolinkPlanificationCoo
 
 
 class GateTriggerButton(CoordinatorEntity[DomolinkPlanificationCoordinator], ButtonEntity):
-    """Bouton pour actionner le portail (impulsion ouverture / arrêt / fermeture)."""
+    """Bouton pour actionner un accès (impulsion ouverture / arrêt / fermeture)."""
 
     _attr_has_entity_name = True
-    _attr_name = "Portail Actionner"
     _attr_icon = "mdi:gate"
 
-    def __init__(self, coordinator: DomolinkPlanificationCoordinator, entry: ConfigEntry) -> None:
+    def __init__(
+        self,
+        coordinator: DomolinkPlanificationCoordinator,
+        entry: ConfigEntry,
+        gate_id: str | None = None,
+    ) -> None:
         super().__init__(coordinator)
         self.entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_gate_trigger_button"
+        self.gate_id = gate_id
+        if gate_id and gate_id != "gate_1":
+            self._attr_unique_id = f"{entry.entry_id}_{gate_id}_trigger_button"
+        else:
+            self._attr_unique_id = f"{entry.entry_id}_gate_trigger_button"
+
+    @property
+    def _cfg(self) -> dict[str, Any]:
+        return self.coordinator.storage.get_gate_config(self.gate_id)
+
+    @property
+    def name(self) -> str:
+        if self.gate_id and self.gate_id != "gate_1":
+            return f"{self._cfg.get('name', self.gate_id)} Actionner"
+        return "Portail Actionner"
 
     async def async_press(self) -> None:
-        """Déclenche la commande du portail."""
-        await self.coordinator.async_gate_trigger_action(mode="toggle")
+        """Déclenche la commande de l'accès."""
+        await self.coordinator.async_gate_trigger_action(mode="toggle", gate_id=self.gate_id)
 
     @property
     def device_info(self) -> dict[str, Any]:
@@ -142,20 +217,38 @@ class GateTriggerButton(CoordinatorEntity[DomolinkPlanificationCoordinator], But
 
 
 class GateCloseButton(CoordinatorEntity[DomolinkPlanificationCoordinator], ButtonEntity):
-    """Bouton pour forcer la fermeture immédiate du portail."""
+    """Bouton pour forcer la fermeture immédiate d'un accès."""
 
     _attr_has_entity_name = True
-    _attr_name = "Portail Fermer"
     _attr_icon = "mdi:gate-arrow-right"
 
-    def __init__(self, coordinator: DomolinkPlanificationCoordinator, entry: ConfigEntry) -> None:
+    def __init__(
+        self,
+        coordinator: DomolinkPlanificationCoordinator,
+        entry: ConfigEntry,
+        gate_id: str | None = None,
+    ) -> None:
         super().__init__(coordinator)
         self.entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_gate_close_button"
+        self.gate_id = gate_id
+        if gate_id and gate_id != "gate_1":
+            self._attr_unique_id = f"{entry.entry_id}_{gate_id}_close_button"
+        else:
+            self._attr_unique_id = f"{entry.entry_id}_gate_close_button"
+
+    @property
+    def _cfg(self) -> dict[str, Any]:
+        return self.coordinator.storage.get_gate_config(self.gate_id)
+
+    @property
+    def name(self) -> str:
+        if self.gate_id and self.gate_id != "gate_1":
+            return f"{self._cfg.get('name', self.gate_id)} Fermer"
+        return "Portail Fermer"
 
     async def async_press(self) -> None:
-        """Déclenche la fermeture du portail."""
-        await self.coordinator.async_gate_trigger_action(mode="close")
+        """Déclenche la fermeture de l'accès."""
+        await self.coordinator.async_gate_trigger_action(mode="close", gate_id=self.gate_id)
 
     @property
     def device_info(self) -> dict[str, Any]:
@@ -168,20 +261,38 @@ class GateCloseButton(CoordinatorEntity[DomolinkPlanificationCoordinator], Butto
 
 
 class GatePedestrianButton(CoordinatorEntity[DomolinkPlanificationCoordinator], ButtonEntity):
-    """Bouton pour actionner l'accès piéton du portail."""
+    """Bouton pour actionner l'accès piéton / livreur."""
 
     _attr_has_entity_name = True
-    _attr_name = "Portail Accès Piéton"
     _attr_icon = "mdi:walk"
 
-    def __init__(self, coordinator: DomolinkPlanificationCoordinator, entry: ConfigEntry) -> None:
+    def __init__(
+        self,
+        coordinator: DomolinkPlanificationCoordinator,
+        entry: ConfigEntry,
+        gate_id: str | None = None,
+    ) -> None:
         super().__init__(coordinator)
         self.entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_gate_pedestrian_button"
+        self.gate_id = gate_id
+        if gate_id and gate_id != "gate_1":
+            self._attr_unique_id = f"{entry.entry_id}_{gate_id}_pedestrian_button"
+        else:
+            self._attr_unique_id = f"{entry.entry_id}_gate_pedestrian_button"
+
+    @property
+    def _cfg(self) -> dict[str, Any]:
+        return self.coordinator.storage.get_gate_config(self.gate_id)
+
+    @property
+    def name(self) -> str:
+        if self.gate_id and self.gate_id != "gate_1":
+            return f"{self._cfg.get('name', self.gate_id)} Accès Piéton"
+        return "Portail Accès Piéton"
 
     async def async_press(self) -> None:
-        """Déclenche la commande d'accès piéton."""
-        await self.coordinator.async_gate_trigger_action(mode="pedestrian")
+        """Déclenche la commande d'accès piéton / livreur."""
+        await self.coordinator.async_gate_trigger_action(mode="pedestrian", gate_id=self.gate_id)
 
     @property
     def device_info(self) -> dict[str, Any]:
@@ -191,5 +302,3 @@ class GatePedestrianButton(CoordinatorEntity[DomolinkPlanificationCoordinator], 
             "manufacturer": "DomoLink",
             "model": "Contrôleur d'Accès Universel",
         }
-
-

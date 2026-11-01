@@ -48,8 +48,13 @@ from custom_components.domolink_planification.const import (
     GATE_TYPE_DOOR,
     GATE_TYPE_GARAGE,
     DEFAULT_GATE_CONFIG,
+    AUTO_COND_TIME_WINDOW,
+    AUTO_ACTION_GATE,
 )
 from custom_components.domolink_planification.storage import PlanificationStorage
+from custom_components.domolink_planification.recurrence import RecurrenceEngine
+from custom_components.domolink_planification.solar_shading import SolarShadingEvaluator
+from datetime import datetime, date, timedelta
 
 
 class TestMultiGateStorage(unittest.IsolatedAsyncioTestCase):
@@ -142,6 +147,76 @@ class TestMultiGateStorage(unittest.IsolatedAsyncioTestCase):
         success = await self.storage.async_delete_gate("door_temp")
         self.assertTrue(success)
         self.assertNotIn("door_temp", self.storage.get_gates())
+
+    def test_daily_jitter_determinism(self):
+        """Vérifie que le Jitter de simulation de présence est déterministe par jour et borné."""
+        sched = {
+            "id": "sched_presence_1",
+            "random_jitter_minutes": 15,
+            "time_type": "fixed",
+            "time": "20:00",
+            "recurrence_mode": "every",
+            "weekdays": [0, 1, 2, 3, 4, 5, 6],
+        }
+        d1 = date(2026, 11, 2)
+        j1 = RecurrenceEngine.get_daily_jitter_minutes(sched, d1)
+        j2 = RecurrenceEngine.get_daily_jitter_minutes(sched, d1)
+        self.assertEqual(j1, j2)
+        self.assertTrue(-15 <= j1 <= 15)
+
+        # Vérifie que compute_next_run et check_trigger_match tombent exactement sur la même minute
+        base_dt = datetime(2026, 11, 2, 20, 0) + timedelta(minutes=j1)
+        self.assertTrue(RecurrenceEngine.check_trigger_match(sched, base_dt))
+
+    def test_solar_shading_override_and_wind_safety(self):
+        """Vérifie la dérogation manuelle, la sérialisation ISO et l'alerte vent."""
+        mock_hass = MagicMock()
+
+        def get_state(entity_id):
+            st = MagicMock()
+            if entity_id == "sun.sun":
+                st.state = "above_horizon"
+                st.attributes = {"azimuth": 180.0, "elevation": 45.0}
+                return st
+            if entity_id == "cover.volet_salon":
+                # L'utilisateur a bougé le volet manuellement à 65% alors que la dernière commande était 20%
+                st.state = "open"
+                st.attributes = {"current_position": 65}
+                return st
+            if entity_id == "sensor.vent":
+                st.state = "55"
+                st.attributes = {}
+                return st
+            return None
+
+        mock_hass.states.get = get_state
+        engine = SolarShadingEvaluator(mock_hass)
+
+        rule = {
+            "id": "solar_1",
+            "cover_entity_id": "cover.volet_salon",
+            "orientation": "S",
+            "mode": "summer",
+            "shading_position": 20,
+            "open_position": 100,
+            "manual_override_minutes": 120,
+            "wind_speed_threshold": 0,
+        }
+        now = datetime(2026, 7, 15, 14, 0)
+        prev_state = {"is_shaded": True, "last_commanded_pos": 20, "unshaded_since": now.isoformat()}
+
+        res = engine.evaluate_rule(rule, prev_state, now=now)
+        self.assertTrue(res["manual_override"])
+        self.assertFalse(res["should_act"])
+        self.assertEqual(res["current_position"], 65)
+
+        # Test sécurité vent prioritaire sur tout
+        rule["wind_speed_threshold"] = 45
+        rule["wind_sensor_entity"] = "sensor.vent"
+        res_wind = engine.evaluate_rule(rule, res, now=now)
+        self.assertTrue(res_wind["wind_alert"])
+        self.assertEqual(res_wind["target_position"], 100)
+        self.assertFalse(res_wind["manual_override"])
 
 
 if __name__ == "__main__":

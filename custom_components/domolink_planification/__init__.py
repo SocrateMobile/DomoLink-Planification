@@ -33,7 +33,7 @@ from .storage import PlanificationStorage
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["switch", "sensor", "button"]
+PLATFORMS = ["switch", "sensor", "button", "cover"]
 
 
 async def async_setup(hass: HomeAssistant, config: dict[str, Any]) -> bool:
@@ -209,6 +209,7 @@ class DomolinkPlanificationApiView(HomeAssistantView):
                 "gate": self.coordinator.get_gate_status(),
                 "gates": self.coordinator.get_all_gates_status(),
                 "gate_history": self.coordinator.storage.get_gate_history(),
+                "labels": self.coordinator.data.get("labels", []),
                 "automations": self.coordinator.storage.get_automations(),
                 "automation_traces": self.coordinator.storage.get_automation_traces(),
             }
@@ -262,7 +263,24 @@ class DomolinkPlanificationApiView(HomeAssistantView):
         if action == "save_settings":
             await self.coordinator.storage.async_update_settings(body)
             self.coordinator.async_set_updated_data(await self.coordinator._async_update_data())
-            return self.json({"status": "ok"})
+            return self.json({"status": "ok", "settings": self.coordinator.storage.get_settings()})
+
+        if action == "toggle_vacation_mode":
+            curr = bool(self.coordinator.storage.get_settings().get("vacation_mode", False))
+            new_val = body.get("vacation_mode", not curr)
+            await self.coordinator.storage.async_update_settings({"vacation_mode": bool(new_val)})
+            self.coordinator.async_set_updated_data(await self.coordinator._async_update_data())
+            return self.json({"status": "ok", "vacation_mode": bool(new_val)})
+
+        if action == "clear_solar_override":
+            sched_id = body.get("id") or body.get("schedule_id")
+            if sched_id:
+                from homeassistant.util import dt as dt_util
+                self.coordinator.clear_solar_override(sched_id)
+                await self.coordinator._evaluate_solar_shading_rules(dt_util.now())
+                self.coordinator.async_set_updated_data(await self.coordinator._async_update_data())
+                return self.json({"status": "ok"})
+            return self.json({"error": "ID manquant"}, status=400)
 
         if action == "save_gate_config":
             gate_id = body.get("id") or body.get("gate_id") or "gate_1"

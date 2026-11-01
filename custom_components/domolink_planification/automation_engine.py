@@ -1,7 +1,8 @@
 """Moteur d'automatisations modernes et performantes pour DomoLink-Planification.
 
-Gère les déclencheurs (événements, boutons Zigbee, états, seuils, soleil, calendrier),
+Gère les déclencheurs (événements, boutons Zigbee/ZHA/Z2M/Shelly, états, seuils, soleil, calendrier),
 les filtres/conditions contextuelles, l'anti-rebond matériel, les modes d'exécution,
+le contrôle natif des accès DomoLink (Portails, Portes, Garages),
 ainsi que la traçabilité complète de chaque étape d'exécution.
 """
 
@@ -29,6 +30,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     AUTO_ACTION_DELAY,
     AUTO_ACTION_DEVICE,
+    AUTO_ACTION_GATE,
     AUTO_ACTION_IF_THEN,
     AUTO_ACTION_NOTIFICATION,
     AUTO_ACTION_SERVICE,
@@ -58,6 +60,7 @@ from .const import (
     HOLIDAY_MODE_EXCLUDE,
     HOLIDAY_MODE_ONLY,
     HOLIDAY_MODE_WEEKEND,
+    TARGET_TYPE_GATE,
 )
 from .holidays import HolidayEngine
 from .storage import PlanificationStorage
@@ -74,10 +77,12 @@ class AutomationEngine:
         hass: HomeAssistant,
         storage: PlanificationStorage,
         resolver: TargetResolver,
+        coordinator: Any = None,
     ) -> None:
         self.hass = hass
         self.storage = storage
         self.resolver = resolver
+        self.coordinator = coordinator
 
         self._unsub_listeners: list[Callable[[], None]] = []
         self._running_tasks: dict[str, list[asyncio.Task]] = {}
@@ -122,12 +127,12 @@ class AutomationEngine:
         def _async_on_deconz_event(event: Event) -> None:
             self._handle_incoming_event("deconz_event", event.data)
 
-        # 3. Écouteur pour zigbee2mqtt ou événements personnalisés
+        # 3. Écouteur pour shelly.click
         @callback
-        def _async_on_custom_event(event: Event) -> None:
-            self._handle_incoming_event(event.event_type, event.data)
+        def _async_on_shelly_event(event: Event) -> None:
+            self._handle_incoming_event("shelly.click", event.data)
 
-        # 4. Écouteur de changement d'état (capteurs, interrupteurs, trackers)
+        # 4. Écouteur de changement d'état (capteurs, interrupteurs, trackers, Z2M sensor.*_action)
         @callback
         def _async_on_state_changed(event: Event) -> None:
             self._handle_state_changed_event(event.data)
@@ -138,6 +143,9 @@ class AutomationEngine:
             )
             self._unsub_listeners.append(
                 self.hass.bus.async_listen("deconz_event", _async_on_deconz_event)
+            )
+            self._unsub_listeners.append(
+                self.hass.bus.async_listen("shelly.click", _async_on_shelly_event)
             )
             self._unsub_listeners.append(
                 self.hass.bus.async_listen(EVENT_STATE_CHANGED, _async_on_state_changed)
@@ -176,7 +184,11 @@ class AutomationEngine:
             return
 
         # Filtrer les événements pertinents (boutons, télécommandes, clics)
-        if event_type in ("zha_event", "deconz_event") or "click" in str(event_data).lower() or "button" in str(event_data).lower():
+        if (
+            event_type in ("zha_event", "deconz_event", "shelly.click")
+            or "click" in str(event_data).lower()
+            or "button" in str(event_data).lower()
+        ):
             self._sniffed_event = {
                 "event_type": event_type,
                 "event_data": dict(event_data),
@@ -189,7 +201,7 @@ class AutomationEngine:
     # Réception et acheminement des événements
     # -------------------------------------------------------------------------
     def _handle_incoming_event(self, event_type: str, event_data: dict[str, Any]) -> None:
-        """Traite un événement de bus (zha_event, deconz, etc.)."""
+        """Traite un événement de bus (zha_event, deconz, shelly.click, etc.)."""
         self._check_sniffer(event_type, event_data)
 
         automations = self.storage.get_automations()
@@ -213,7 +225,7 @@ class AutomationEngine:
                             })
                             break
 
-                # 2. Déclencheur Bouton Universel (Spécialisé Zigbee/ZHA/Z2M)
+                # 2. Déclencheur Bouton Universel (Spécialisé Zigbee/ZHA/Z2M/Shelly)
                 elif t_type == AUTO_TRIGGER_BUTTON:
                     if self._match_button_trigger(trigger, event_type, event_data):
                         self._trigger_automation(auto_id, auto, {
@@ -238,6 +250,19 @@ class AutomationEngine:
         if old_val == new_val:
             return
 
+        # Support Sniffer pour Zigbee2MQTT (sensor.*_action)
+        if self._sniffer_active and entity_id.endswith("_action") and new_val not in ("", STATE_UNKNOWN, STATE_UNAVAILABLE):
+            self._sniffed_event = {
+                "event_type": "z2m_action",
+                "event_data": {
+                    "entity_id": entity_id,
+                    "device_id": entity_id,
+                    "command": new_val,
+                },
+                "timestamp": dt_util.now().isoformat(),
+            }
+            self._sniffer_active = False
+
         automations = self.storage.get_automations()
         for auto_id, auto in automations.items():
             if not auto.get("enabled", True):
@@ -246,14 +271,27 @@ class AutomationEngine:
             for trigger in auto.get("triggers", []):
                 t_type = trigger.get("type")
 
+                # Déclencheur Bouton Universel via entité Zigbee2MQTT (sensor.*_action)
+                if t_type == AUTO_TRIGGER_BUTTON:
+                    trig_ent = trigger.get("entity_id") or trigger.get("device_id")
+                    if trig_ent == entity_id and new_val not in ("", STATE_UNKNOWN, STATE_UNAVAILABLE):
+                        synthetic_data = {"device_id": entity_id, "command": new_val}
+                        if self._match_button_trigger(trigger, "state_changed", synthetic_data):
+                            self._trigger_automation(auto_id, auto, {
+                                "trigger_type": AUTO_TRIGGER_BUTTON,
+                                "entity_id": entity_id,
+                                "action": new_val,
+                            })
+                            break
+
                 # Déclencheur État standard
-                if t_type == AUTO_TRIGGER_STATE:
+                elif t_type == AUTO_TRIGGER_STATE:
                     if trigger.get("entity_id") == entity_id:
                         to_filter = trigger.get("to")
                         from_filter = trigger.get("from")
 
-                        to_match = (to_filter is None) or (str(to_filter).lower() == str(new_val).lower())
-                        from_match = (from_filter is None) or (old_val and str(from_filter).lower() == str(old_val).lower())
+                        to_match = (not to_filter) or (str(to_filter).lower() == str(new_val).lower())
+                        from_match = (not from_filter) or (old_val is not None and str(from_filter).lower() == str(old_val).lower())
 
                         if to_match and from_match:
                             self._trigger_automation(auto_id, auto, {
@@ -274,12 +312,12 @@ class AutomationEngine:
                             below = trigger.get("below")
 
                             crossed = False
-                            if above is not None:
+                            if above is not None and str(above) != "":
                                 above_val = float(above)
                                 if new_num > above_val and (old_num is None or old_num <= above_val):
                                     crossed = True
 
-                            if below is not None:
+                            if below is not None and str(below) != "":
                                 below_val = float(below)
                                 if new_num < below_val and (old_num is None or old_num >= below_val):
                                     crossed = True
@@ -323,7 +361,12 @@ class AutomationEngine:
         # 1. Vérifier le Device ID ou IEEE
         target_device = trigger.get("device_id")
         if target_device:
-            event_device = event_data.get("device_id") or event_data.get("device_ieee")
+            event_device = (
+                event_data.get("device_id")
+                or event_data.get("device_ieee")
+                or event_data.get("id")
+                or event_data.get("entity_id")
+            )
             if not event_device or str(target_device).lower() != str(event_device).lower():
                 return False
 
@@ -332,20 +375,20 @@ class AutomationEngine:
         if desired_action == "any":
             return True
 
-        # Extraire la commande et les arguments
-        command = str(event_data.get("command", "")).lower()
+        # Extraire la commande et les arguments (ZHA, deCONZ, Shelly, Z2M)
+        command = str(event_data.get("command") or event_data.get("click_type") or event_data.get("event") or "").lower()
         args = event_data.get("args", {})
         click_type = ""
 
         if isinstance(args, dict):
-            click_type = str(args.get("click_type", "")).lower()
+            click_type = str(args.get("click_type") or args.get("press_type") or "").lower()
         elif isinstance(args, list) and args:
             click_type = str(args[0]).lower()
 
-        # Dictionnaire des équivalences pour boutons Xiaomi, Aqara, Sonoff, Philips, IKEA
-        single_clicks = {"single", "click", "short_press", "remote_button_short_press", "toggle", "on", "off"}
-        double_clicks = {"double", "double_click", "remote_button_double_press"}
-        hold_clicks = {"hold", "long_press", "remote_button_long_press", "remote_button_long_release"}
+        # Dictionnaire des équivalences pour boutons Xiaomi, Aqara, Sonoff, Philips, IKEA, Shelly
+        single_clicks = {"single", "click", "short_press", "remote_button_short_press", "toggle", "on", "off", "1002", "single_push", "btn_down"}
+        double_clicks = {"double", "double_click", "remote_button_double_press", "1004", "double_push"}
+        hold_clicks = {"hold", "long_press", "remote_button_long_press", "remote_button_long_release", "1001", "long_push"}
 
         if desired_action in ("single", "court"):
             return (command in single_clicks) or (click_type in single_clicks)
@@ -478,7 +521,7 @@ class AutomationEngine:
                         action_trace["success"] = True
                         action_trace["branch"] = branch
 
-                    # C. Service / Appareil / Cible via TargetResolver
+                    # C. Action Accès DomoLink (Portail / Porte / Garage) ou Service HA
                     else:
                         success = await self._execute_single_action(action)
                         action_trace["success"] = success
@@ -514,11 +557,66 @@ class AutomationEngine:
         return True
 
     async def _execute_single_action(self, action: dict[str, Any]) -> bool:
-        """Exécute une action unitaire (service, appareil, notification)."""
+        """Exécute une action unitaire (accès DomoLink, service, appareil, notification)."""
+        act_type = action.get("type", AUTO_ACTION_SERVICE)
         target_type = action.get("target_type", "entity")
         target_value = action.get("target_value")
 
-        # Support syntaxe HA native ou directe
+        # 1. Contrôle direct d'un Accès DomoLink (Portail, Porte, Garage)
+        if act_type == AUTO_ACTION_GATE or target_type == TARGET_TYPE_GATE:
+            if not self.coordinator:
+                _LOGGER.error("DomoLink: Coordinateur non lié pour exécuter l'action d'accès.")
+                return False
+            gate_id = action.get("gate_id") or target_value or "gate_1"
+            operation = (
+                action.get("gate_operation")
+                or action.get("operation")
+                or action.get("service")
+                or "toggle"
+            )
+            if operation in ("toggle", "trigger"):
+                return await self.coordinator.async_gate_trigger_action(mode="toggle", gate_id=gate_id)
+            elif operation in ("open", "open_now"):
+                return await self.coordinator.async_gate_trigger_action(mode="open", gate_id=gate_id)
+            elif operation in ("close", "close_now"):
+                return await self.coordinator.async_gate_trigger_action(mode="close", gate_id=gate_id)
+            elif operation == "pedestrian":
+                return await self.coordinator.async_gate_trigger_action(mode="pedestrian", gate_id=gate_id)
+            elif operation == "hold_open":
+                dur = int(action.get("duration_minutes") or 60)
+                await self.coordinator.async_gate_set_hold_open(True, duration_minutes=dur, gate_id=gate_id)
+                return True
+            elif operation == "cancel_hold_open":
+                await self.coordinator.async_gate_set_hold_open(False, gate_id=gate_id)
+                return True
+            return await self.coordinator.async_gate_trigger_action(mode="toggle", gate_id=gate_id)
+
+        # 2. Notification directe dans une étape d'automatisation
+        if act_type == AUTO_ACTION_NOTIFICATION or target_type == "notification":
+            msg = action.get("message") or action.get("service_data", {}).get("message") or "Alerte Automatisation DomoLink"
+            notify_srv = target_value or action.get("service") or "notify.persistent_notification"
+            try:
+                if notify_srv == "notify.persistent_notification" or notify_srv == "persistent":
+                    await self.hass.services.async_call(
+                        "persistent_notification",
+                        "create",
+                        {"title": "DomoLink Automatisation", "message": msg},
+                        blocking=True,
+                    )
+                    return True
+                srv_name = notify_srv.replace("notify.", "")
+                await self.hass.services.async_call(
+                    "notify",
+                    srv_name,
+                    {"message": msg, "title": "DomoLink"},
+                    blocking=True,
+                )
+                return True
+            except Exception as err:
+                _LOGGER.error("DomoLink: Erreur notification automatisation: %s", err)
+                return False
+
+        # 3. Support syntaxe HA native ou directe
         if "target" in action:
             return await self.resolver.execute_action("direct", None, action)
 
@@ -570,8 +668,8 @@ class AutomationEngine:
                     above = cond.get("above")
                     below = cond.get("below")
 
-                    p_above = True if above is None else num_val > float(above)
-                    p_below = True if below is None else num_val < float(below)
+                    p_above = True if (above is None or str(above) == "") else num_val > float(above)
+                    p_below = True if (below is None or str(below) == "") else num_val < float(below)
 
                     passed = p_above and p_below
                     reason = f"{entity_id} = {num_val} (plage attendue: >{above} et <{below})"
@@ -579,27 +677,37 @@ class AutomationEngine:
                     passed = False
                     reason = f"Valeur non numérique pour {entity_id}: {err}"
 
-            # 3. Condition Plage Horaire
+            # 3. Condition Plage Horaire (supporte le passage de minuit ex: 22:00 -> 06:00)
             elif c_type == AUTO_COND_TIME_WINDOW:
                 after_str = cond.get("after")
                 before_str = cond.get("before")
                 curr_t = now.time()
 
-                p_after = True
-                p_before = True
+                t_after: time | None = None
+                t_before: time | None = None
 
                 if after_str:
-                    parts = [int(p) for p in after_str.split(":")]
+                    parts = [int(p) for p in after_str.split(":")[:2]]
                     t_after = time(parts[0], parts[1])
-                    p_after = curr_t >= t_after
 
                 if before_str:
-                    parts = [int(p) for p in before_str.split(":")]
+                    parts = [int(p) for p in before_str.split(":")[:2]]
                     t_before = time(parts[0], parts[1])
-                    p_before = curr_t <= t_before
 
-                passed = p_after and p_before
-                reason = f"Heure actuelle {curr_t.strftime('%H:%M')} dans l'intervalle [{after_str} - {before_str}]"
+                if t_after is not None and t_before is not None:
+                    if t_after <= t_before:
+                        passed = t_after <= curr_t <= t_before
+                    else:
+                        # Plage traversant minuit (ex: 22:00 -> 06:00)
+                        passed = curr_t >= t_after or curr_t <= t_before
+                elif t_after is not None:
+                    passed = curr_t >= t_after
+                elif t_before is not None:
+                    passed = curr_t <= t_before
+                else:
+                    passed = True
+
+                reason = f"Heure actuelle {curr_t.strftime('%H:%M')} dans l'intervalle [{after_str or '00:00'} - {before_str or '23:59'}]"
 
             # 4. Condition Jours Fériés (Moteur Offline DomoLink)
             elif c_type == AUTO_COND_HOLIDAY:
@@ -631,7 +739,21 @@ class AutomationEngine:
                     passed = not is_home
                     reason = "Absence confirmée" if not is_home else "Présence constatée"
 
-            # 6. Condition Soleil (Position au-dessus ou sous l'horizon)
+            # 6. Condition Alarme
+            elif c_type == AUTO_COND_ALARM:
+                a_mode = cond.get("mode", "disarmed")
+                a_ent = cond.get("entity_id") or self.storage.get_settings().get("alarm_entity")
+                st = self.hass.states.get(a_ent) if a_ent else None
+                is_disarmed = st.state in ("disarmed", STATE_OFF) if st else True
+
+                if a_mode == "disarmed":
+                    passed = is_disarmed
+                    reason = "Alarme désarmée" if is_disarmed else f"Alarme armée ({st.state if st else 'N/A'})"
+                else:
+                    passed = not is_disarmed
+                    reason = "Alarme armée" if not is_disarmed else "Alarme désarmée"
+
+            # 7. Condition Soleil (Position au-dessus ou sous l'horizon)
             elif c_type == AUTO_COND_SUN:
                 sun_st = self.hass.states.get("sun.sun")
                 expected_sun = cond.get("state", "above_horizon")
