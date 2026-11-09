@@ -1,5 +1,10 @@
 # <p align="center"><img src="images/icon@2x.png" alt="DomoLink-Planification Logo" width="120"><br>🗓️ DomoLink-Planification</p>
 
+[![Documentation Officielle](https://img.shields.io/badge/Documentation-socratemobile.fr-06b6d4.svg?logo=googlechrome&logoColor=white)](https://socratemobile.fr/integration.html?id=domolink-planification)
+
+> 🌐 **Site officiel & Documentation complète** : Retrouvez le guide d'installation pas à pas, les entités supportées et les exemples d'automatisations sur [socratemobile.fr](https://socratemobile.fr/integration.html?id=domolink-planification).
+
+
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/default)
 [![version](https://img.shields.io/badge/version-v3.2.1-blue.svg)](https://github.com/SocrateMobile/DomoLink-Planification/releases)
 

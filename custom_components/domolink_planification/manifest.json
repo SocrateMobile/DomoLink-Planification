@@ -10,7 +10,7 @@
     "frontend",
     "http"
   ],
-  "documentation": "https://github.com/SocrateMobile/DomoLink-Planification",
+  "documentation": "https://socratemobile.fr/integration.html?id=domolink-planification",
   "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/SocrateMobile/DomoLink-Planification/issues",
