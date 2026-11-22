@@ -71,13 +71,14 @@ _LOGGER = logging.getLogger(__name__)
 class DomolinkPlanificationCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     """Coordinateur gérant la planification, le suivi solaire et l'exécution des actions."""
 
-    def __init__(self, hass: HomeAssistant, storage: PlanificationStorage) -> None:
+    def __init__(self, hass: HomeAssistant, storage: PlanificationStorage, entry: Any = None) -> None:
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
             update_interval=timedelta(seconds=30),
         )
+        self.entry = entry
         self.storage = storage
         self.resolver = TargetResolver(hass)
         self.automation_engine = AutomationEngine(hass, storage, self.resolver, coordinator=self)
